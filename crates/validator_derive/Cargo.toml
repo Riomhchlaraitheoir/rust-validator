@@ -1,0 +1,11 @@
+[package]
+name = "validator_derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0"
+validator_derive_impl.path = "../validator_derive_impl"

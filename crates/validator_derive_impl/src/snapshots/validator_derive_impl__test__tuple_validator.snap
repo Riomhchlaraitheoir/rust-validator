@@ -1,0 +1,65 @@
+---
+source: crates/validator_derive_impl/src/test.rs
+expression: formatted
+---
+#[derive(Debug)]
+struct SignupDataValidationErrors(
+    Option<::validator::InvalidEmailError>,
+    Option<::validator::InvalidUrlError>,
+    Option<::validator::InvalidLengthError>,
+);
+struct SignupDataValidator(
+    ::validator::EmailValidator,
+    ::validator::UrlValidator,
+    ::validator::LengthValidator,
+);
+impl ::validator::Validator<SignupData> for SignupDataValidator {
+    type Error = SignupDataValidationErrors;
+    fn validate(
+        &self,
+        SignupData(value0, value1, value2): &SignupData,
+    ) -> Result<(), Self::Error> {
+        let mut _valid = true;
+        let validator = self;
+        let error = SignupDataValidationErrors {
+            0: {
+                match validator.0.validate(value0) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
+            1: {
+                match validator.1.validate(value1) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
+            2: {
+                match validator.2.validate(value2) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
+        };
+        if _valid { Ok(()) } else { Err(error) }
+    }
+}
+impl ::validator::Validate for SignupData {
+    type Validator = SignupDataValidator;
+    fn validator() -> Self::Validator {
+        SignupDataValidator {
+            0: ::validator::EmailValidator,
+            1: ::validator::UrlValidator,
+            2: ::validator::LengthValidator::new(Some(1usize), None),
+        }
+    }
+}

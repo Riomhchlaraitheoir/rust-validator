@@ -1,0 +1,106 @@
+---
+source: crates/validator_derive_impl/src/test.rs
+expression: formatted
+---
+#[derive(Debug)]
+enum RequestValidationErrors {
+    Signup {
+        mail: Option<::validator::InvalidEmailError>,
+        site: Option<::validator::InvalidUrlError>,
+        first_name: Option<::validator::InvalidLengthError>,
+    },
+    Login(
+        Option<::validator::InvalidEmailError>,
+        Option<::validator::InvalidLengthError>,
+    ),
+}
+struct RequestSignupValidator {
+    mail: ::validator::EmailValidator,
+    site: ::validator::UrlValidator,
+    first_name: ::validator::LengthValidator,
+}
+struct RequestLoginValidator(::validator::EmailValidator, ::validator::LengthValidator);
+struct RequestValidator(RequestSignupValidator, RequestLoginValidator);
+impl ::validator::Validator<Request> for RequestValidator {
+    type Error = RequestValidationErrors;
+    fn validate(&self, value: &Request) -> Result<(), Self::Error> {
+        match value {
+            Request::Signup { mail, site, first_name } => {
+                let mut _valid = true;
+                let validator = &self.0;
+                let error = RequestValidationErrors::Signup {
+                    mail: {
+                        match validator.mail.validate(mail) {
+                            Ok(()) => None,
+                            Err(error) => {
+                                _valid = false;
+                                Some(error)
+                            }
+                        }
+                    },
+                    site: {
+                        match validator.site.validate(site) {
+                            Ok(()) => None,
+                            Err(error) => {
+                                _valid = false;
+                                Some(error)
+                            }
+                        }
+                    },
+                    first_name: {
+                        match validator.first_name.validate(first_name) {
+                            Ok(()) => None,
+                            Err(error) => {
+                                _valid = false;
+                                Some(error)
+                            }
+                        }
+                    },
+                };
+                if _valid { Ok(()) } else { Err(error) }
+            }
+            RequestValidationErrors::Login(value0, value1) => {
+                let mut _valid = true;
+                let validator = &self.1;
+                let error = RequestValidationErrors::Login {
+                    0: {
+                        match validator.0.validate(value0) {
+                            Ok(()) => None,
+                            Err(error) => {
+                                _valid = false;
+                                Some(error)
+                            }
+                        }
+                    },
+                    1: {
+                        match validator.1.validate(value1) {
+                            Ok(()) => None,
+                            Err(error) => {
+                                _valid = false;
+                                Some(error)
+                            }
+                        }
+                    },
+                };
+                if _valid { Ok(()) } else { Err(error) }
+            }
+            Request::Logout => Ok(()),
+        }
+    }
+}
+impl ::validator::Validate for Request {
+    type Validator = RequestValidator;
+    fn validator() -> Self::Validator {
+        RequestValidator {
+            0: RequestSignupValidator {
+                mail: ::validator::EmailValidator,
+                site: ::validator::UrlValidator,
+                first_name: ::validator::LengthValidator::new(Some(1usize), None),
+            },
+            1: RequestLoginValidator {
+                0: ::validator::EmailValidator,
+                1: ::validator::LengthValidator::new(Some(8usize), Some(64usize)),
+            },
+        }
+    }
+}
