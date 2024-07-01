@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::fmt::Debug;
 
 #[cfg(feature = "derive")]
 pub use ::validator_derive::Validator;
@@ -24,7 +25,7 @@ pub trait Validate {
 }
 
 pub trait Validator<T: ?Sized>: Sized {
-    type Error;
+    type Error: Debug;
     fn validate(&self, value: &T) -> Result<(), Self::Error>;
 }
 

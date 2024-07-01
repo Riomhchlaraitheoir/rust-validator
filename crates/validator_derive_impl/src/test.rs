@@ -67,3 +67,23 @@ fn enum_validator() {
     let formatted = prettyplease::unparse(&as_file);
     insta::assert_snapshot!(formatted)
 }
+
+
+#[test]
+fn list_validator() {
+    let input = quote! {
+        struct HasList {
+            #[validator(elements)]
+            list: Vec<Element>
+        }
+    };
+
+    let input: Input = syn::parse2(input).unwrap_or_else(|err| panic!("failed to parse input: {err}: {start:?} {end:?} ", start = err.span().start(), end = err.span().end()));
+    let output = super::derive(input);
+    let as_file = syn::parse_file(&output.to_string())
+        .unwrap_or_else(|err| panic!("failed to parse outputted code: {err}\n{}", &output.to_string()));
+    let formatted = prettyplease::unparse(&as_file);
+    insta::assert_snapshot!(formatted)
+}
+
+

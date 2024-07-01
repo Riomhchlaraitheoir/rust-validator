@@ -1,0 +1,54 @@
+---
+source: crates/validator_derive_impl/src/test.rs
+expression: formatted
+---
+#[derive(Debug, PartialEq, Clone)]
+struct HasListValidationErrors {
+    list: Option<
+        ::validator::ElementsInvalid<
+            <<<Vec<
+                Element,
+            > as ::validator::HasElements>::Element as ::validator::Validate>::Validator as ::validator::Validator<
+                <Vec<Element> as ::validator::HasElements>::Element,
+            >>::Error,
+        >,
+    >,
+}
+struct HasListValidator {
+    list: ::validator::ElementsValidator<
+        <<Vec<
+            Element,
+        > as ::validator::HasElements>::Element as ::validator::Validate>::Validator,
+    >,
+}
+impl ::validator::Validator<HasList> for HasListValidator {
+    type Error = HasListValidationErrors;
+    fn validate(&self, HasList { list }: &HasList) -> Result<(), Self::Error> {
+        let mut _valid = true;
+        let validator = self;
+        let error = HasListValidationErrors {
+            list: {
+                match validator.list.validate(list) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
+        };
+        if _valid { Ok(()) } else { Err(error) }
+    }
+}
+impl ::validator::Validate for HasList {
+    type Validator = HasListValidator;
+    fn validator() -> Self::Validator {
+        HasListValidator {
+            list: ::validator::ElementsValidator::new(
+                <<Vec<
+                    Element,
+                > as ::validator::HasElements>::Element as ::validator::Validate>::validator(),
+            ),
+        }
+    }
+}

@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/validator_derive/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/validator_derive_impl/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/validator/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
