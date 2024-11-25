@@ -13,7 +13,7 @@ macro_rules! modules {
     };
 }
 
-modules!(not_empty, and, or, email, url, ip, length, elements, tuple);
+modules!(not_empty, and, or, email, url, ip, length, elements, tuple, range);
 
 pub trait Validate {
     type Validator: Validator<Self>;

@@ -2,22 +2,24 @@
 source: crates/validator_derive_impl/src/test.rs
 expression: formatted
 ---
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 struct SignupDataValidationErrors {
     mail: Option<::validator::InvalidEmailError>,
     site: Option<::validator::InvalidUrlError>,
     first_name: Option<::validator::InvalidLengthError>,
+    age: Option<::validator::NotInRangeError<::std::ops::RangeFrom<u8>>>,
 }
 struct SignupDataValidator {
     mail: ::validator::EmailValidator,
     site: ::validator::UrlValidator,
     first_name: ::validator::LengthValidator,
+    age: ::validator::RangeValidator<::std::ops::RangeFrom<u8>>,
 }
 impl ::validator::Validator<SignupData> for SignupDataValidator {
     type Error = SignupDataValidationErrors;
     fn validate(
         &self,
-        SignupData { mail, site, first_name }: &SignupData,
+        SignupData { mail, site, first_name, age }: &SignupData,
     ) -> Result<(), Self::Error> {
         let mut _valid = true;
         let validator = self;
@@ -49,6 +51,15 @@ impl ::validator::Validator<SignupData> for SignupDataValidator {
                     }
                 }
             },
+            age: {
+                match validator.age.validate(age) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
         };
         if _valid { Ok(()) } else { Err(error) }
     }
@@ -60,6 +71,7 @@ impl ::validator::Validate for SignupData {
             mail: ::validator::EmailValidator,
             site: ::validator::UrlValidator,
             first_name: ::validator::LengthValidator::new(Some(1usize), None),
+            age: ::validator::RangeValidator::new(18..),
         }
     }
 }

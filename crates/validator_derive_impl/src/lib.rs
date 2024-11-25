@@ -1,7 +1,59 @@
 use proc_macro2::{Ident, Span, TokenStream};
-use proc_macro_error::emit_error;
 use quote::{quote, ToTokens};
-use syn::{AngleBracketedGenericArguments, Arm, Attribute, Block, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprStruct, ExprTuple, FieldMutability, FieldPat, Fields, FieldsNamed, FieldsUnnamed, FieldValue, FnArg, GenericArgument, ImplItem, ImplItemFn, ImplItemType, Index, Item, ItemEnum, ItemImpl, ItemStruct, LitInt, Member, Meta, parenthesized, parse_quote, Pat, Path, PathArguments, PathSegment, PatIdent, PatStruct, PatTupleStruct, PatType, ReturnType, Signature, Stmt, Token, Type, TypePath, TypeReference, TypeTuple, Variant, Visibility};
+use syn::{
+    AngleBracketedGenericArguments,
+    Arm,
+    Attribute,
+    Block,
+    Data,
+    DataEnum,
+    DataStruct,
+    DeriveInput,
+    Expr,
+    ExprStruct,
+    ExprTuple,
+    ExprRange,
+    FieldMutability,
+    FieldPat,
+    Fields,
+    FieldsNamed,
+    FieldsUnnamed,
+    FieldValue,
+    FnArg,
+    GenericArgument,
+    ImplItem,
+    ImplItemFn,
+    ImplItemType,
+    Index,
+    Item,
+    ItemEnum,
+    ItemImpl,
+    ItemStruct,
+    LitInt,
+    Member,
+    Meta,
+    parenthesized,
+    parse_quote,
+    Pat,
+    Path,
+    PathArguments,
+    PathSegment,
+    PatIdent,
+    PatStruct,
+    PatTupleStruct,
+    PatType,
+    RangeLimits,
+    ReturnType,
+    Signature,
+    Stmt,
+    Token,
+    Type,
+    TypePath,
+    TypeReference,
+    TypeTuple,
+    Variant,
+    Visibility
+};
 use syn::parse::{Parse, Parser, ParseStream};
 use syn::spanned::Spanned;
 use syn::token::{Colon, Comma, Fn, PathSep, Semi};
@@ -213,6 +265,7 @@ enum Validator {
     Default,
     Ignore,
     Tuple(Vec<Self>),
+    Range(ExprRange),
 }
 
 fn parse_struct_input(data: &DataStruct) -> syn::Result<InputData> {
@@ -936,7 +989,10 @@ impl Parse for Validator {
 
                 if let Some(equal) = equal {
                     if min.is_some() || max.is_some() {
-                        emit_error!(equal_name.unwrap().span(), "cannot use 'equal' with either 'min' or 'max'")
+                        return Err(syn::Error::new(
+                            equal_name.unwrap().span(),
+                            "cannot use 'equal' with either 'min' or 'max'",
+                        ));
                     }
 
                     Ok(Validator::Length(Some(equal), Some(equal)))
@@ -971,6 +1027,12 @@ impl Parse for Validator {
                     }
                 }
                 Ok(Validator::Tuple(children))
+            }
+            "range" => {
+                let content;
+                parenthesized!(content in input);
+                let range: ExprRange = content.parse()?;
+                Ok(Validator::Range(range))
             }
             other => {
                 Err(syn::Error::new(ident.span(), format!("unknown validator type: \"{other}\"")))
@@ -1017,6 +1079,9 @@ impl Validator {
                         }).collect(),
                 })
             }
+            Validator::Range(range) => {
+                parse_quote!(::validator::RangeValidator::new(#range))
+            }
             Validator::Ignore => {
                 parse_quote!(::validator::IgnoreValidator)
             }
@@ -1053,6 +1118,10 @@ impl Validator {
                             child.validator_type(ty)
                         }).collect(),
                 })
+            }
+            Validator::Range(range) => {
+                let range: Type = range_type(range, ty);
+                parse_quote!(::validator::RangeValidator<#range>)
             }
             Validator::Ignore => {
                 parse_quote!(::validator::IgnoreValidator)
@@ -1108,10 +1177,68 @@ impl Validator {
                     },
                 })
             }
+            Validator::Range(range) => {
+                let range: Type = range_type(range, ty);
+                parse_quote!(::validator::NotInRangeError<#range>)
+            }
             Validator::Ignore => {
                 parse_quote!(::core::convert::Infallible)
             }
         }
+    }
+}
+
+fn range_type(range: &ExprRange, value: &Type) -> Type {
+    match range {
+        ExprRange {
+            start: Some(_),
+            limits: RangeLimits::HalfOpen(_),
+            end: Some(_),
+            ..
+        } => {
+            parse_quote!(::std::ops::Range<#value>)
+        }
+        ExprRange {
+            start: Some(_),
+            limits: RangeLimits::HalfOpen(_),
+            end: None,
+            ..
+        } => {
+            parse_quote!(::std::ops::RangeFrom<#value>)
+        }
+        ExprRange {
+            start: None,
+            limits: RangeLimits::HalfOpen(_),
+            end: Some(_),
+            ..
+        } => {
+            parse_quote!(::std::ops::RangeTo<#value>)
+        }
+        ExprRange {
+            start: None,
+            limits: RangeLimits::HalfOpen(_),
+            end: None,
+            ..
+        } => {
+            parse_quote!(::std::ops::RangeFull<#value>)
+        }
+        ExprRange {
+            start: Some(_),
+            limits: RangeLimits::Closed(_),
+            end: Some(_),
+            ..
+        } => {
+            parse_quote!(::std::ops::RangeInclusive<#value>)
+        }
+        ExprRange {
+            start: None,
+            limits: RangeLimits::Closed(_),
+            end: Some(_),
+            ..
+        } => {
+            parse_quote!(::std::ops::RangeToInclusive<#value>)
+        }
+        _ => unreachable!("unknown range type {range:?}")
     }
 }
 
