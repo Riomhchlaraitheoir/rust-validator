@@ -30,7 +30,7 @@ mod test {
     }
 
     fn assert_not_empty<T: ?Sized>(value: &T) where NotEmptyValidator: Validator<T> {
-        NotEmptyValidator.validate(value).expect("Should not be empty");
+        NotEmptyValidator.validate(value).unwrap_or_else(|_| panic!("Should not be empty"));
     }
 
     #[test]
