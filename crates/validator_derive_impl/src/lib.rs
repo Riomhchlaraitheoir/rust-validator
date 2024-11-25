@@ -1,59 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{
-    AngleBracketedGenericArguments,
-    Arm,
-    Attribute,
-    Block,
-    Data,
-    DataEnum,
-    DataStruct,
-    DeriveInput,
-    Expr,
-    ExprStruct,
-    ExprTuple,
-    ExprRange,
-    FieldMutability,
-    FieldPat,
-    Fields,
-    FieldsNamed,
-    FieldsUnnamed,
-    FieldValue,
-    FnArg,
-    GenericArgument,
-    ImplItem,
-    ImplItemFn,
-    ImplItemType,
-    Index,
-    Item,
-    ItemEnum,
-    ItemImpl,
-    ItemStruct,
-    LitInt,
-    Member,
-    Meta,
-    parenthesized,
-    parse_quote,
-    Pat,
-    Path,
-    PathArguments,
-    PathSegment,
-    PatIdent,
-    PatStruct,
-    PatTupleStruct,
-    PatType,
-    RangeLimits,
-    ReturnType,
-    Signature,
-    Stmt,
-    Token,
-    Type,
-    TypePath,
-    TypeReference,
-    TypeTuple,
-    Variant,
-    Visibility
-};
+use syn::{AngleBracketedGenericArguments, Arm, Attribute, Block, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprStruct, ExprTuple, FieldMutability, FieldPat, Fields, FieldsNamed, FieldsUnnamed, FieldValue, FnArg, GenericArgument, ImplItem, ImplItemFn, ImplItemType, Index, Item, ItemEnum, ItemImpl, ItemStruct, LitInt, Member, Meta, parenthesized, parse_quote, Pat, Path, PathArguments, PathSegment, PatIdent, PatStruct, PatTupleStruct, PatType, ReturnType, Signature, Stmt, Token, Type, TypePath, TypeReference, TypeTuple, Variant, Visibility, ExprRange, RangeLimits, token};
 use syn::parse::{Parse, Parser, ParseStream};
 use syn::spanned::Spanned;
 use syn::token::{Colon, Comma, Fn, PathSep, Semi};
@@ -949,15 +896,13 @@ impl Parse for Validator {
             "ip" => Ok(Validator::IpAddr),
             "ignore" => Ok(Validator::Ignore),
             "elements" => Ok(Validator::Elements({
-                let content = (|| {
+                Box::new(if input.peek(token::Paren) {
                     let content;
                     parenthesized!(content in input);
-                    Ok(content)
-                })();
-                match content {
-                    Ok(content) => Box::new(content.parse()?),
-                    Err(_) => Box::<Self>::default()
-                }
+                    content.parse()?
+                } else {
+                    Validator::Default
+                })
             })),
             "length" => {
                 let content;
@@ -1065,7 +1010,7 @@ impl Validator {
             }
             Validator::Default => parse_quote!(<#ty as ::validator::Validate>::validator()),
             Validator::Elements(elements) => {
-                let element_type = parse_quote!(<#ty as ::validator::HasElements>::Element);
+                let element_type = parse_quote!(<#ty as ::validator::HasElements>::Item);
                 let elements = elements.create(&element_type);
                 parse_quote!(::validator::ElementsValidator::new(#elements))
             }
@@ -1106,7 +1051,7 @@ impl Validator {
             Validator::Length(_, _) => parse_quote!(::validator::LengthValidator),
             Validator::Default => parse_quote!(<#ty as ::validator::Validate>::Validator),
             Validator::Elements(elements) => {
-                let element_type = parse_quote!(<#ty as ::validator::HasElements>::Element);
+                let element_type = parse_quote!(<#ty as ::validator::HasElements>::Item);
                 let elements = elements.validator_type(&element_type);
                 parse_quote!(::validator::ElementsValidator<#elements>)
             }
@@ -1147,7 +1092,7 @@ impl Validator {
             Validator::Length(_, _) => parse_quote!(::validator::InvalidLengthError),
             Validator::Default => parse_quote!(<<#ty as ::validator::Validate>::Validator as ::validator::Validator<#ty>>::Error),
             Validator::Elements(elements) => {
-                let element_type = parse_quote!(<#ty as ::validator::HasElements>::Element);
+                let element_type = parse_quote!(<#ty as ::validator::HasElements>::Item);
                 let elements = elements.error_type(&element_type);
                 parse_quote!(::validator::ElementsInvalid<#elements>)
             }

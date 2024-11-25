@@ -8,18 +8,32 @@ struct SignupDataValidationErrors {
     site: Option<::validator::InvalidUrlError>,
     first_name: Option<::validator::InvalidLengthError>,
     age: Option<::validator::NotInRangeError<::std::ops::RangeFrom<u8>>>,
+    dogs: Option<
+        ::validator::ElementsInvalid<
+            <<<Vec<
+                Dog,
+            > as ::validator::HasElements>::Item as ::validator::Validate>::Validator as ::validator::Validator<
+                <Vec<Dog> as ::validator::HasElements>::Item,
+            >>::Error,
+        >,
+    >,
 }
 struct SignupDataValidator {
     mail: ::validator::EmailValidator,
     site: ::validator::UrlValidator,
     first_name: ::validator::LengthValidator,
     age: ::validator::RangeValidator<::std::ops::RangeFrom<u8>>,
+    dogs: ::validator::ElementsValidator<
+        <<Vec<
+            Dog,
+        > as ::validator::HasElements>::Item as ::validator::Validate>::Validator,
+    >,
 }
 impl ::validator::Validator<SignupData> for SignupDataValidator {
     type Error = SignupDataValidationErrors;
     fn validate(
         &self,
-        SignupData { mail, site, first_name, age }: &SignupData,
+        SignupData { mail, site, first_name, age, dogs }: &SignupData,
     ) -> Result<(), Self::Error> {
         let mut _valid = true;
         let validator = self;
@@ -60,6 +74,15 @@ impl ::validator::Validator<SignupData> for SignupDataValidator {
                     }
                 }
             },
+            dogs: {
+                match validator.dogs.validate(dogs) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
         };
         if _valid { Ok(()) } else { Err(error) }
     }
@@ -72,6 +95,11 @@ impl ::validator::Validate for SignupData {
             site: ::validator::UrlValidator,
             first_name: ::validator::LengthValidator::new(Some(1usize), None),
             age: ::validator::RangeValidator::new(18..),
+            dogs: ::validator::ElementsValidator::new(
+                <<Vec<
+                    Dog,
+                > as ::validator::HasElements>::Item as ::validator::Validate>::validator(),
+            ),
         }
     }
 }

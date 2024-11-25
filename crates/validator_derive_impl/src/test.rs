@@ -13,7 +13,9 @@ fn struct_validator() {
             #[validator(length(min = 1))]
             first_name: String,
             #[validator(range(18..))]
-            age: u8
+            age: u8,
+            #[validator(elements)]
+            dogs: Vec<Dog>
         }
     };
 
