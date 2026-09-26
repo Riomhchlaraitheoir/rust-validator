@@ -41,7 +41,7 @@ mod test {
     }
 
     fn assert_is_not_in_range<R, T: PartialOrd<T>>(range: R, value: T) where RangeValidator<R>: Validator<T> {
-        RangeValidator{range}.validate(&value).unwrap_or_else(|_| panic!("Should not be in range"));;
+        RangeValidator{range}.validate(&value).unwrap_or_else(|_| panic!("Should not be in range"));
     }
 
     #[test]

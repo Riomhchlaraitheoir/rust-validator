@@ -1,8 +1,4 @@
----
-source: crates/validator_derive_impl/src/test.rs
-expression: formatted
----
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 enum RequestValidationErrors {
     Signup {
         mail: Option<::validator::InvalidEmailError>,
@@ -14,11 +10,13 @@ enum RequestValidationErrors {
         Option<::validator::InvalidLengthError>,
     ),
 }
+#[doc(hidden)]
 struct RequestSignupValidator {
     mail: ::validator::EmailValidator,
     site: ::validator::UrlValidator,
     first_name: ::validator::LengthValidator,
 }
+#[doc(hidden)]
 struct RequestLoginValidator(::validator::EmailValidator, ::validator::LengthValidator);
 struct RequestValidator(RequestSignupValidator, RequestLoginValidator);
 impl ::validator::Validator<Request> for RequestValidator {
@@ -59,7 +57,7 @@ impl ::validator::Validator<Request> for RequestValidator {
                 };
                 if _valid { Ok(()) } else { Err(error) }
             }
-            RequestValidationErrors::Login(value0, value1) => {
+            Request::Login(value0, value1) => {
                 let mut _valid = true;
                 let validator = &self.1;
                 let error = RequestValidationErrors::Login {

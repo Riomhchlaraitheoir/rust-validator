@@ -7,5 +7,5 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-syn = "2.0"
+syn = { workspace = true }
 validator_derive_impl.path = "../validator_derive_impl"

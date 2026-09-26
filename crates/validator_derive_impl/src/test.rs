@@ -1,93 +1,29 @@
 use quote::quote;
-use syn::DeriveInput;
+use syn::File;
+use syn::parse::{Parse, Parser};
 use crate::Input;
 
-#[test]
-fn struct_validator() {
-    let input = quote! {
-        struct SignupData {
-            #[validator(email)]
-            mail: String,
-            #[validator(url)]
-            site: String,
-            #[validator(length(min = 1))]
-            first_name: String,
-            #[validator(range(18..))]
-            age: u8,
-            #[validator(elements)]
-            dogs: Vec<Dog>
+macro_rules! tests {
+    ($($name:ident),*) => {
+        $(
+        #[test]
+        fn $name() {
+            let input = include_str!(concat!("test/inputs/", stringify!($name), ".rs"));
+            let output = include_str!(concat!("test/outputs/", stringify!($name), ".rs"));
+            run_test(input, output)
         }
+        )*
     };
-
-    let input: Input = syn::parse2(input).unwrap_or_else(|err| panic!("failed to parse input: {err}: {start:?} {end:?} ", start = err.span().start(), end = err.span().end()));
-    let output = super::derive(input);
-    let as_file = syn::parse_file(&output.to_string())
-        .unwrap_or_else(|err| panic!("failed to parse outputted code: {err}\n{}", &output.to_string()));
-    let formatted = prettyplease::unparse(&as_file);
-    insta::assert_snapshot!(formatted)
 }
 
-#[test]
-fn tuple_validator() {
-    let input = quote! {
-        struct SignupData(
-            #[validator(email)]
-            String,
-            #[validator(url)]
-            String,
-            #[validator(length(min = 1))]
-            String,
-        );
-    };
+tests![struct_validator, tuple_validator, enum_validator, list_validator];
 
-    let input: Input = syn::parse2(input).unwrap_or_else(|err| panic!("failed to parse input: {err}: {start:?} {end:?} ", start = err.span().start(), end = err.span().end()));
-    let output = super::derive(input);
-    let as_file = syn::parse_file(&output.to_string())
-        .unwrap_or_else(|err| panic!("failed to parse outputted code: {err}\n{}", &output.to_string()));
-    let formatted = prettyplease::unparse(&as_file);
-    insta::assert_snapshot!(formatted)
+fn run_test(input: &str, expected: &str) {
+    let input: Input = syn::parse_str(input).unwrap();
+    let expected: File = syn::parse_str(expected).unwrap();
+    let output = File::parse.parse2(super::derive(input)).expect("failed to parse output");
+    let expected = prettyplease::unparse(&expected);
+    let output = prettyplease::unparse(&output);
+    difference::assert_diff!(&output, &expected, "\n", 0);
 }
-#[test]
-fn enum_validator() {
-    let input = quote! {
-        enum Request {
-            Signup {
-                #[validator(email)]
-                mail: String,
-                #[validator(url)]
-                site: String,
-                #[validator(length(min = 1))]
-                first_name: String,
-            },
-            Login(#[validator(email)] String, #[validator(length(min = 8, max = 64))] String),
-            Logout
-        }
-    };
-
-    let input: Input = syn::parse2(input).unwrap_or_else(|err| panic!("failed to parse input: {err}: {start:?} {end:?} ", start = err.span().start(), end = err.span().end()));
-    let output = super::derive(input);
-    let as_file = syn::parse_file(&output.to_string())
-        .unwrap_or_else(|err| panic!("failed to parse outputted code: {err}\n{}", &output.to_string()));
-    let formatted = prettyplease::unparse(&as_file);
-    insta::assert_snapshot!(formatted)
-}
-
-
-#[test]
-fn list_validator() {
-    let input = quote! {
-        struct HasList {
-            #[validator(elements)]
-            list: Vec<Element>
-        }
-    };
-
-    let input: Input = syn::parse2(input).unwrap_or_else(|err| panic!("failed to parse input: {err}: {start:?} {end:?} ", start = err.span().start(), end = err.span().end()));
-    let output = super::derive(input);
-    let as_file = syn::parse_file(&output.to_string())
-        .unwrap_or_else(|err| panic!("failed to parse outputted code: {err}\n{}", &output.to_string()));
-    let formatted = prettyplease::unparse(&as_file);
-    insta::assert_snapshot!(formatted)
-}
-
 

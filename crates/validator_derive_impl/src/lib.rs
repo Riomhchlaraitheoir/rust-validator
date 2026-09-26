@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
-use syn::{AngleBracketedGenericArguments, Arm, Attribute, Block, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprStruct, ExprTuple, FieldMutability, FieldPat, Fields, FieldsNamed, FieldsUnnamed, FieldValue, FnArg, GenericArgument, ImplItem, ImplItemFn, ImplItemType, Index, Item, ItemEnum, ItemImpl, ItemStruct, LitInt, Member, Meta, parenthesized, parse_quote, Pat, Path, PathArguments, PathSegment, PatIdent, PatStruct, PatTupleStruct, PatType, ReturnType, Signature, Stmt, Token, Type, TypePath, TypeReference, TypeTuple, Variant, Visibility, ExprRange, RangeLimits, token};
+use quote::{format_ident, quote, ToTokens};
+use syn::{AngleBracketedGenericArguments, Arm, Attribute, Block, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprStruct, ExprTuple, FieldPat, Fields, FieldsNamed, FieldsUnnamed, FieldValue, FnArg, GenericArgument, ImplItem, ImplItemFn, ImplItemType, Index, Item, ItemEnum, ItemImpl, ItemStruct, LitInt, Member, Meta, parenthesized, parse_quote, Pat, Path, PathArguments, PathSegment, PatIdent, PatStruct, PatTupleStruct, PatType, ReturnType, Signature, Stmt, Token, Type, TypePath, TypeReference, TypeTuple, Variant, Visibility, ExprRange, RangeLimits, token, Safety, ImplModifiers, FnModifiers, TypeModifiers, FieldModifiers};
 use syn::parse::{Parse, Parser, ParseStream};
 use syn::spanned::Spanned;
 use syn::token::{Colon, Comma, Fn, PathSep, Semi};
@@ -9,33 +9,7 @@ use syn::token::{Colon, Comma, Fn, PathSep, Semi};
 mod test;
 
 fn validator_signature() -> Signature {
-    Signature {
-        constness: None,
-        asyncness: None,
-        unsafety: None,
-        abi: None,
-        fn_token: Fn::default(),
-        ident: Ident::new("validator", Span::call_site()),
-        generics: Default::default(),
-        paren_token: Default::default(),
-        inputs: Default::default(),
-        variadic: None,
-        output: ReturnType::Type(Default::default(), Box::new(
-            Type::Path(TypePath {
-                qself: None,
-                path: Path {
-                    leading_colon: None,
-                    segments: [PathSegment {
-                        ident: Ident::new("Self", Span::call_site()),
-                        arguments: Default::default(),
-                    }, PathSegment {
-                        ident: Ident::new("Validator", Span::call_site()),
-                        arguments: Default::default(),
-                    }].into_iter().collect(),
-                },
-            })
-        )),
-    }
+    parse_quote!(fn validator() -> Self::Validator)
 }
 
 impl Parse for Input {
@@ -71,7 +45,7 @@ pub fn derive(input: Input) -> TokenStream {
 
 fn parse_enum_input(input: &DeriveInput, data: &DataEnum) -> syn::Result<InputData> {
     let variants: syn::Result<Vec<_>> = data.variants.iter().map(|variant| {
-        let fields = if variant.fields == Fields::Unit {
+        let fields = if matches!(variant.fields, Fields::Unit) {
             None
         } else {
             Some(variant.fields
@@ -198,7 +172,7 @@ struct Field {
     validator: Validator,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 enum Validator {
     NotEmpty,
     And(Box<Self>, Box<Self>),
@@ -224,10 +198,10 @@ fn parse_struct_input(data: &DataStruct) -> syn::Result<InputData> {
 
 impl Input {
     fn validator_type(&self) -> Ident {
-        Ident::new(&format!("{name}Validator", name = self.name), self.name.span())
+        format_ident!("{}Validator", self.name)
     }
     fn error_type(&self) -> Ident {
-        Ident::new(&format!("{name}ValidationErrors", name = self.name), self.name.span())
+        format_ident!("{}ValidationErrors", self.name)
     }
 
     fn error_definition(&self) -> Item {
@@ -236,34 +210,19 @@ impl Input {
         match data {
             InputData::Struct { fields, semi_token } => {
                 let fields = fields.error_definition();
-                Item::Struct(
-                    ItemStruct {
-                        attrs: vec![
-                            parse_quote!(#[derive(Debug, PartialEq, Clone)])
-                        ],
-                        vis: vis.clone(),
-                        struct_token: Default::default(),
-                        ident: error_type,
-                        generics: Default::default(),
-                        fields,
-                        semi_token: semi_token.as_ref().cloned(),
-                    },
-                )
+                parse_quote!{
+                    #[derive(Debug, PartialEq, Clone)]
+                    struct #error_type #fields #semi_token
+                }
             }
             InputData::Enum { variants } => {
-                Item::Enum(
-                    ItemEnum {
-                        attrs: vec![parse_quote!(#[derive(Debug, PartialEq, Clone)])],
-                        vis: self.vis.clone(),
-                        enum_token: Default::default(),
-                        ident: error_type,
-                        generics: Default::default(),
-                        brace_token: Default::default(),
-                        variants: variants.iter()
-                            .filter_map(EnumVariant::error_variant)
-                            .collect(),
-                    },
-                )
+                let vis = self.vis.clone();
+                let variants = variants.iter()
+                    .filter_map(EnumVariant::error_variant);
+                parse_quote! {
+                    #[derive(Debug, PartialEq, Clone)]
+                    enum #error_type { #(#variants),* }
+                }
             }
         }
     }
@@ -276,23 +235,13 @@ impl Input {
                 let vis = &self.vis;
                 let error = self.error_type();
                 let define_validator_fields = fields.validator_fields();
-                let validate_fields = fields.fields.iter().map(Field::validate_field).collect();
+                let validate_fields = fields.fields.iter().map(Field::validate_field);
 
-                let error_declaration = Expr::Struct(ExprStruct {
-                    attrs: vec![],
-                    qself: None,
-                    path: Path {
-                        leading_colon: None,
-                        segments: [PathSegment {
-                            ident: error.clone(),
-                            arguments: Default::default(),
-                        }].into_iter().collect(),
-                    },
-                    brace_token: Default::default(),
-                    fields: validate_fields,
-                    dot2_token: None,
-                    rest: None,
-                });
+                let error_declaration: Expr = parse_quote!{
+                    #error {
+                        #(#validate_fields),*
+                    }
+                };
 
                 vec![
                     Item::Struct(ItemStruct {
@@ -306,18 +255,18 @@ impl Input {
                     }),
                     Item::Impl(ItemImpl {
                         attrs: vec![],
-                        defaultness: None,
+                        modifiers: ImplModifiers::default(),
                         unsafety: None,
                         impl_token: Default::default(),
                         generics: Default::default(),
-                        trait_: Some((None, parse_quote!(::validator::Validator<#derived_type>), Default::default())),
+                        trait_: Some((parse_quote!(::validator::Validator<#derived_type>), Default::default())),
                         self_ty: Box::new(simple_type(name)),
                         brace_token: Default::default(),
                         items: vec![
                             ImplItem::Type(ImplItemType {
                                 attrs: vec![],
                                 vis: Visibility::Inherited,
-                                defaultness: None,
+                                modifiers: TypeModifiers::default(),
                                 type_token: Default::default(),
                                 ident: Ident::new("Error", Span::call_site()),
                                 generics: Default::default(),
@@ -328,11 +277,11 @@ impl Input {
                             ImplItem::Fn(ImplItemFn {
                                 attrs: vec![],
                                 vis: Visibility::Inherited,
-                                defaultness: None,
+                                modifiers: FnModifiers::default(),
                                 sig: Signature {
                                     constness: None,
                                     asyncness: None,
-                                    unsafety: None,
+                                    safety: Safety::Default,
                                     abi: None,
                                     fn_token: Default::default(),
                                     ident: Ident::new("validate", Span::call_site()),
@@ -382,6 +331,7 @@ impl Input {
                                             }),
                                             colon_token: Default::default(),
                                             ty: Box::new(Type::Reference(TypeReference {
+                                                attrs: vec![],
                                                 and_token: Default::default(),
                                                 lifetime: None,
                                                 mutability: None,
@@ -487,7 +437,6 @@ impl Input {
                                         .collect(),
                                 })
                             },
-                            guard: None,
                             fat_arrow_token: Default::default(),
                             body: Box::new(parse_quote!({
                                 let mut _valid = true;
@@ -520,7 +469,8 @@ impl Input {
                             Some(syn::Field {
                                 attrs: vec![],
                                 vis: Visibility::Inherited,
-                                mutability: FieldMutability::None,
+                                modifiers: FieldModifiers::default(),
+                                default: None,
                                 ident: None,
                                 colon_token: None,
                                 ty: simple_type(variant.validator_name()),
@@ -532,18 +482,18 @@ impl Input {
 
                 items.push(Item::Impl(ItemImpl {
                     attrs: vec![],
-                    defaultness: None,
+                    modifiers: ImplModifiers::default(),
                     unsafety: None,
                     impl_token: Default::default(),
                     generics: Default::default(),
-                    trait_: Some((None, parse_quote!(::validator::Validator<#derived_type>), Default::default())),
+                    trait_: Some((parse_quote!(::validator::Validator<#derived_type>), Default::default())),
                     self_ty: Box::new(simple_type(self.validator_type())),
                     brace_token: Default::default(),
                     items: vec![
                         ImplItem::Type(ImplItemType {
                             attrs: vec![],
                             vis: Visibility::Inherited,
-                            defaultness: None,
+                            modifiers: Default::default(),
                             type_token: Default::default(),
                             ident: Ident::new("Error", Span::call_site()),
                             generics: Default::default(),
@@ -594,12 +544,11 @@ impl Input {
 
                 Item::Impl(ItemImpl {
                     attrs: vec![],
-                    defaultness: None,
+                    modifiers: Default::default(),
                     unsafety: None,
                     impl_token: Default::default(),
                     generics: Default::default(),
                     trait_: Some((
-                        None,
                         parse_quote!(::validator::Validate),
                         Default::default()
                     )),
@@ -609,7 +558,7 @@ impl Input {
                         ImplItem::Type(ImplItemType {
                             attrs: vec![],
                             vis: Visibility::Inherited,
-                            defaultness: None,
+                            modifiers: Default::default(),
                             type_token: Default::default(),
                             ident: Ident::new("Validator", Span::call_site()),
                             generics: Default::default(),
@@ -620,7 +569,7 @@ impl Input {
                         ImplItem::Fn(ImplItemFn {
                             attrs: vec![],
                             vis: Visibility::Inherited,
-                            defaultness: None,
+                            modifiers: Default::default(),
                             sig: validator_signature(),
                             block: Block {
                                 brace_token: Default::default(),
@@ -635,12 +584,11 @@ impl Input {
             InputData::Enum { variants } => {
                 Item::Impl(ItemImpl {
                     attrs: vec![],
-                    defaultness: None,
+                    modifiers: Default::default(),
                     unsafety: None,
                     impl_token: Default::default(),
                     generics: Default::default(),
                     trait_: Some((
-                        None,
                         parse_quote!(::validator::Validate),
                         Default::default()
                     )),
@@ -650,7 +598,7 @@ impl Input {
                         ImplItem::Type(ImplItemType {
                             attrs: vec![],
                             vis: Visibility::Inherited,
-                            defaultness: None,
+                            modifiers: Default::default(),
                             type_token: Default::default(),
                             ident: Ident::new("Validator", Span::call_site()),
                             generics: Default::default(),
@@ -661,7 +609,7 @@ impl Input {
                         ImplItem::Fn(ImplItemFn {
                             attrs: vec![],
                             vis: Visibility::Inherited,
-                            defaultness: None,
+                            modifiers: Default::default(),
                             sig: validator_signature(),
                             block: Block {
                                 brace_token: Default::default(),
@@ -718,6 +666,7 @@ fn named_fields(fields: impl Iterator<Item=syn::Field>) -> Fields {
 fn simple_type(name: Ident) -> Type {
     Type::Path(TypePath {
         qself: None,
+        attrs: vec![],
         path: Path {
             leading_colon: None,
             segments: [PathSegment::from(name)].into_iter().collect(),
@@ -791,7 +740,8 @@ impl Field {
         syn::Field {
             attrs: vec![],
             vis: self.vis.clone(),
-            mutability: FieldMutability::None,
+            modifiers: Default::default(),
+            default: None,
             ident: name.cloned(),
             colon_token: colon,
             ty,
@@ -811,7 +761,7 @@ impl Field {
 impl EnumVariant {
     fn validator_name(&self) -> Ident {
         let Self { derived_type, name, .. } = self;
-        Ident::new(&format!("{derived_type}_{name}_Validator"), self.derived_type.span())
+        format_ident!("{derived_type}{name}Validator")
     }
 
     fn create_validator(&self) -> Option<Expr> {
@@ -843,7 +793,6 @@ impl EnumVariant {
         Some(Item::Struct(
             ItemStruct {
                 attrs: vec![
-                    parse_quote!(#[allow(non_camel_case_types)]),
                     parse_quote!(#[doc(hidden)]),
                 ],
                 vis: Visibility::Inherited,
@@ -1015,14 +964,13 @@ impl Validator {
                 parse_quote!(::validator::ElementsValidator::new(#elements))
             }
             Validator::Tuple(children) => {
-                Expr::Tuple(ExprTuple {
-                    attrs: vec![],
-                    paren_token: Default::default(),
-                    elems: children.iter()
-                        .map(|child| {
-                            child.create(ty)
-                        }).collect(),
-                })
+                let children = children.iter()
+                    .map(|child| {
+                        child.create(ty)
+                    });
+                parse_quote!{
+                    (#(#children,)*)
+                }
             }
             Validator::Range(range) => {
                 parse_quote!(::validator::RangeValidator::new(#range))
@@ -1056,13 +1004,13 @@ impl Validator {
                 parse_quote!(::validator::ElementsValidator<#elements>)
             }
             Validator::Tuple(children) => {
-                Type::Tuple(TypeTuple {
-                    paren_token: Default::default(),
-                    elems: children.iter()
-                        .map(|child| {
-                            child.validator_type(ty)
-                        }).collect(),
-                })
+                let children = children.iter()
+                    .map(|child| {
+                        child.validator_type(ty)
+                    });
+                parse_quote! {
+                    (#(#children,)*)
+                }
             }
             Validator::Range(range) => {
                 let range: Type = range_type(range, ty);
@@ -1097,30 +1045,14 @@ impl Validator {
                 parse_quote!(::validator::ElementsInvalid<#elements>)
             }
             Validator::Tuple(children) => {
-                Type::Path(TypePath {
-                    qself: None,
-                    path: Path {
-                        leading_colon: Default::default(),
-                        segments: [
-                            PathSegment {
-                                ident: Ident::new("validator", Span::call_site()),
-                                arguments: Default::default(),
-                            },
-                            PathSegment {
-                                ident: Ident::new(&format!("TupleError{}", children.len()), Span::call_site()),
-                                arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                                    colon2_token: None,
-                                    lt_token: Default::default(),
-                                    args: children.iter()
-                                        .map(|child| {
-                                            GenericArgument::Type(child.error_type(ty))
-                                        }).collect(),
-                                    gt_token: Default::default(),
-                                }),
-                            }
-                        ].into_iter().collect(),
-                    },
-                })
+                let error = &format_ident!("TupleError{}", children.len());
+                let children = children.iter()
+                    .map(|child| {
+                        GenericArgument::Type(child.error_type(ty))
+                    });
+                parse_quote!(
+                    validator::#error<#(#children),*>
+                )
             }
             Validator::Range(range) => {
                 let range: Type = range_type(range, ty);
@@ -1183,7 +1115,7 @@ fn range_type(range: &ExprRange, value: &Type) -> Type {
         } => {
             parse_quote!(::std::ops::RangeToInclusive<#value>)
         }
-        _ => unreachable!("unknown range type {range:?}")
+        _ => unreachable!("unknown range type {}", range.to_token_stream())
     }
 }
 
@@ -1194,37 +1126,6 @@ fn option_literal<T: ToTokens>(opt: Option<T>) -> TokenStream {
     }
 }
 
-#[allow(dead_code)]
-fn option_type(inner: Type) -> Type {
-    Type::Path(TypePath {
-        qself: None,
-        path: Path {
-            leading_colon: Some(PathSep::default()),
-            segments: [
-                PathSegment {
-                    ident: Ident::new("core", Span::call_site()),
-                    arguments: Default::default(),
-                },
-                PathSegment {
-                    ident: Ident::new("option", Span::call_site()),
-                    arguments: Default::default(),
-                },
-                PathSegment {
-                    ident: Ident::new("Option", Span::call_site()),
-                    arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        colon2_token: None,
-                        lt_token: Default::default(),
-                        args: [
-                            GenericArgument::Type(inner)
-                        ].into_iter().collect(),
-                        gt_token: Default::default(),
-                    }),
-                }
-            ].into_iter().collect(),
-        },
-    })
-}
-
 trait WithMessage {
     fn with_message(self, msg: &str) -> Self;
 }
@@ -1233,7 +1134,7 @@ impl<T> WithMessage for syn::Result<T> {
     #[cfg(test)]
     fn with_message(self, msg: &str) -> Self {
         self.map_err(|err| {
-            syn::Error::new(err.span(), format!("{msg}: {inner}", inner = err.to_string()))
+            syn::Error::new(err.span(), format!("{msg}: {err}"))
         })
     }
     #[cfg(not(test))]

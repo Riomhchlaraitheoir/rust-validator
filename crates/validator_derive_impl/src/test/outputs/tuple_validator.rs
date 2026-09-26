@@ -1,8 +1,4 @@
----
-source: crates/validator_derive_impl/src/test.rs
-expression: formatted
----
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 struct SignupDataValidationErrors(
     Option<::validator::InvalidEmailError>,
     Option<::validator::InvalidUrlError>,

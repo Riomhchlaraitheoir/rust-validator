@@ -1,7 +1,3 @@
----
-source: crates/validator_derive_impl/src/test.rs
-expression: formatted
----
 #[derive(Debug, PartialEq, Clone)]
 struct SignupDataValidationErrors {
     mail: Option<::validator::InvalidEmailError>,

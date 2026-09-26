@@ -13,3 +13,7 @@ regex = "1.10.4"
 url = "2.5.0"
 lazy_static = "1.4.0"
 validator_derive = { path = "../validator_derive", optional = true }
+
+[[test]]
+name = "elements"
+required-features = ["derive"]

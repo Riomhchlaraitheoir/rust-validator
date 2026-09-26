@@ -1,15 +1,11 @@
----
-source: crates/validator_derive_impl/src/test.rs
-expression: formatted
----
 #[derive(Debug, PartialEq, Clone)]
 struct HasListValidationErrors {
     list: Option<
         ::validator::ElementsInvalid<
             <<<Vec<
                 Element,
-            > as ::validator::HasElements>::Element as ::validator::Validate>::Validator as ::validator::Validator<
-                <Vec<Element> as ::validator::HasElements>::Element,
+            > as ::validator::HasElements>::Item as ::validator::Validate>::Validator as ::validator::Validator<
+                <Vec<Element> as ::validator::HasElements>::Item,
             >>::Error,
         >,
     >,
@@ -18,7 +14,7 @@ struct HasListValidator {
     list: ::validator::ElementsValidator<
         <<Vec<
             Element,
-        > as ::validator::HasElements>::Element as ::validator::Validate>::Validator,
+        > as ::validator::HasElements>::Item as ::validator::Validate>::Validator,
     >,
 }
 impl ::validator::Validator<HasList> for HasListValidator {
@@ -47,7 +43,7 @@ impl ::validator::Validate for HasList {
             list: ::validator::ElementsValidator::new(
                 <<Vec<
                     Element,
-                > as ::validator::HasElements>::Element as ::validator::Validate>::validator(),
+                > as ::validator::HasElements>::Item as ::validator::Validate>::validator(),
             ),
         }
     }
