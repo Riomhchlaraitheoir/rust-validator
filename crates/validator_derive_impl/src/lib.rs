@@ -1,9 +1,9 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{AngleBracketedGenericArguments, Arm, Attribute, Block, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprStruct, ExprTuple, FieldPat, Fields, FieldsNamed, FieldsUnnamed, FieldValue, FnArg, GenericArgument, ImplItem, ImplItemFn, ImplItemType, Index, Item, ItemEnum, ItemImpl, ItemStruct, LitInt, Member, Meta, parenthesized, parse_quote, Pat, Path, PathArguments, PathSegment, PatIdent, PatStruct, PatTupleStruct, PatType, ReturnType, Signature, Stmt, Token, Type, TypePath, TypeReference, TypeTuple, Variant, Visibility, ExprRange, RangeLimits, token, Safety, ImplModifiers, FnModifiers, TypeModifiers, FieldModifiers};
-use syn::parse::{Parse, Parser, ParseStream};
+use syn::parse::{Parse, ParseStream, Parser};
 use syn::spanned::Spanned;
-use syn::token::{Colon, Comma, Fn, PathSep, Semi};
+use syn::token::{Colon, Comma, Semi};
+use syn::{parenthesized, parse_quote, token, Arm, Attribute, Block, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprRange, ExprStruct, FieldModifiers, FieldPat, FieldValue, Fields, FieldsNamed, FieldsUnnamed, FnArg, FnModifiers, GenericArgument, ImplItem, ImplItemFn, ImplItemType, ImplModifiers, Index, Item, ItemImpl, ItemStruct, LitInt, Member, Meta, Pat, PatIdent, PatStruct, PatTupleStruct, PatType, Path, PathSegment, RangeLimits, Safety, Signature, Stmt, Token, Type, TypeModifiers, TypePath, TypeReference, Variant, Visibility};
 
 #[cfg(test)]
 mod test;
@@ -212,16 +212,15 @@ impl Input {
                 let fields = fields.error_definition();
                 parse_quote!{
                     #[derive(Debug, PartialEq, Clone)]
-                    struct #error_type #fields #semi_token
+                    #vis struct #error_type #fields #semi_token
                 }
             }
             InputData::Enum { variants } => {
-                let vis = self.vis.clone();
                 let variants = variants.iter()
                     .filter_map(EnumVariant::error_variant);
                 parse_quote! {
                     #[derive(Debug, PartialEq, Clone)]
-                    enum #error_type { #(#variants),* }
+                    #vis enum #error_type { #(#variants),* }
                 }
             }
         }

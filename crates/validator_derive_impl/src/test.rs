@@ -1,7 +1,6 @@
-use quote::quote;
-use syn::File;
-use syn::parse::{Parse, Parser};
 use crate::Input;
+use syn::parse::{Parse, Parser};
+use syn::File;
 
 macro_rules! tests {
     ($($name:ident),*) => {
