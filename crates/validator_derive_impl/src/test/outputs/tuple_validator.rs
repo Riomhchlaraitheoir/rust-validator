@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 struct SignupDataValidationErrors(
     Option<::validator::InvalidEmailError>,
     Option<::validator::InvalidUrlError>,

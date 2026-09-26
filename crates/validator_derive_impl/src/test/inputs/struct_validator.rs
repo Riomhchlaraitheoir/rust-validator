@@ -8,6 +8,6 @@ struct SignupData {
     first_name: String,
     #[validator(range(18..))]
     age: u8,
-    #[validator(elements)]
+    #[validator(and(elements, length(min = 1)))]
     dogs: Vec<Dog>
 }

@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 struct HasListValidationErrors {
     list: Option<
         ::validator::ElementsInvalid<

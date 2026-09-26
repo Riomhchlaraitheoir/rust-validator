@@ -211,7 +211,7 @@ impl Input {
             InputData::Struct { fields, semi_token } => {
                 let fields = fields.error_definition();
                 parse_quote!{
-                    #[derive(Debug, PartialEq, Clone)]
+                    #[derive(Debug, PartialEq, Clone, Default)]
                     #vis struct #error_type #fields #semi_token
                 }
             }
