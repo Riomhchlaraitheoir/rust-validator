@@ -1,7 +1,7 @@
 #[derive(Debug, PartialEq, Clone, Default)]
 struct SignupDataValidationErrors(
     Option<::validator::InvalidEmailError>,
-    Option<::validator::InvalidUrlError>,
+    Option<::validator::UrlValidationError>,
     Option<::validator::InvalidLengthError>,
 );
 struct SignupDataValidator(
@@ -11,6 +11,7 @@ struct SignupDataValidator(
 );
 impl ::validator::Validator<SignupData> for SignupDataValidator {
     type Error = SignupDataValidationErrors;
+    #[allow(non_shorthand_field_patterns)]
     fn validate(
         &self,
         SignupData(value0, value1, value2): &SignupData,
@@ -53,9 +54,9 @@ impl ::validator::Validate for SignupData {
     type Validator = SignupDataValidator;
     fn validator() -> Self::Validator {
         SignupDataValidator {
-            0: ::validator::EmailValidator,
-            1: ::validator::UrlValidator,
-            2: ::validator::LengthValidator::new(Some(1usize), None),
+            0: ::validator::EmailValidator::new("0"),
+            1: ::validator::UrlValidator::new("1"),
+            2: ::validator::LengthValidator::new("2", Some(1usize), None),
         }
     }
 }

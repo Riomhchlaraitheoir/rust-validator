@@ -1,19 +1,31 @@
-use thiserror::Error;
 use crate::length::HasLength;
-use crate::Validator;
+use crate::{ErrorString, ToErrors, Validator};
+use thiserror::Error;
 
-pub struct NotEmptyValidator;
+pub struct NotEmptyValidator(&'static str);
+
+impl NotEmptyValidator {
+    pub fn new(field: &'static str) -> NotEmptyValidator {
+        Self(field)
+    }
+}
 
 #[derive(Debug, PartialEq, Clone, Error)]
-#[error("Value should not be empty")]
-pub struct EmptyValueError;
+#[error("{0} should not be empty")]
+pub struct EmptyValueError(&'static str);
+
+impl ToErrors for EmptyValueError {
+    fn build_errors(&self, errors: &mut Vec<ErrorString>) {
+        errors.push(self.to_string().into());
+    }
+}
 
 impl<T: ?Sized> Validator<T> for NotEmptyValidator where T: HasLength {
     type Error = EmptyValueError;
 
     fn validate(&self, value: &T) -> Result<(), Self::Error> {
         if value._len() == 0 {
-            Err(EmptyValueError)
+            Err(EmptyValueError(self.0))
         } else {
             Ok(())
         }
@@ -26,11 +38,11 @@ mod test {
     use crate::Validator;
 
     fn assert_is_empty<T: ?Sized>(value: &T) where NotEmptyValidator: Validator<T> {
-        NotEmptyValidator.validate(value).expect_err("Should be empty");
+        NotEmptyValidator("test").validate(value).expect_err("Should be empty");
     }
 
     fn assert_not_empty<T: ?Sized>(value: &T) where NotEmptyValidator: Validator<T> {
-        NotEmptyValidator.validate(value).unwrap_or_else(|_| panic!("Should not be empty"));
+        NotEmptyValidator("test").validate(value).unwrap_or_else(|_| panic!("Should not be empty"));
     }
 
     #[test]

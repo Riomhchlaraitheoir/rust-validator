@@ -1,4 +1,4 @@
-
+#[derive(Validator)]
 struct SignupData(
     #[validator(email)]
     String,

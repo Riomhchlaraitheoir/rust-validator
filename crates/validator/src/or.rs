@@ -1,5 +1,5 @@
+use crate::{ErrorString, ToErrors, Validator};
 use thiserror::Error;
-use crate::Validator;
 
 #[derive(Debug, Default)]
 pub struct Or<A, B>(A, B);
@@ -7,6 +7,14 @@ pub struct Or<A, B>(A, B);
 #[derive(Debug, Error, PartialEq, Clone)]
 #[error("{0} and {1}")]
 pub struct OrError<A, B>(A, B);
+
+impl<A, B> ToErrors for OrError<A, B> where A: ToErrors, B: ToErrors
+{
+    fn build_errors(&self, errors: &mut Vec<ErrorString>) {
+        self.0.build_errors(errors);
+        self.1.build_errors(errors);
+    }
+}
 
 impl<A, B, T> Validator<T> for Or<A, B> where A: Validator<T>, B: Validator<T> {
     type Error = OrError<A::Error, B::Error>;

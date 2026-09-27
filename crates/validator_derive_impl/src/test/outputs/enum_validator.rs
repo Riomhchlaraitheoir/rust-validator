@@ -2,7 +2,7 @@
 enum RequestValidationErrors {
     Signup {
         mail: Option<::validator::InvalidEmailError>,
-        site: Option<::validator::InvalidUrlError>,
+        site: Option<::validator::UrlValidationError>,
         first_name: Option<::validator::InvalidLengthError>,
     },
     Login(
@@ -18,12 +18,14 @@ struct RequestSignupValidator {
 }
 #[doc(hidden)]
 struct RequestLoginValidator(::validator::EmailValidator, ::validator::LengthValidator);
+
 struct RequestValidator(RequestSignupValidator, RequestLoginValidator);
+
 impl ::validator::Validator<Request> for RequestValidator {
     type Error = RequestValidationErrors;
     fn validate(&self, value: &Request) -> Result<(), Self::Error> {
         match value {
-            Request::Signup { mail, site, first_name } => {
+            Request::Signup { mail: mail, site: site, first_name: first_name } => {
                 let mut _valid = true;
                 let validator = &self.0;
                 let error = RequestValidationErrors::Signup {
@@ -91,13 +93,13 @@ impl ::validator::Validate for Request {
     fn validator() -> Self::Validator {
         RequestValidator {
             0: RequestSignupValidator {
-                mail: ::validator::EmailValidator,
-                site: ::validator::UrlValidator,
-                first_name: ::validator::LengthValidator::new(Some(1usize), None),
+                mail: ::validator::EmailValidator::new("mail"),
+                site: ::validator::UrlValidator::new("site"),
+                first_name: ::validator::LengthValidator::new("first_name", Some(1usize), None),
             },
             1: RequestLoginValidator {
-                0: ::validator::EmailValidator,
-                1: ::validator::LengthValidator::new(Some(8usize), Some(64usize)),
+                0: ::validator::EmailValidator::new("0"),
+                1: ::validator::LengthValidator::new("1", Some(8usize), Some(64usize)),
             },
         }
     }

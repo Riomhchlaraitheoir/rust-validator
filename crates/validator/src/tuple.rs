@@ -1,3 +1,5 @@
+use crate::Validator;
+
 macro_rules! tuple {
     (($t:ident), ($v:ident), ($e:ident), ($i:tt)) => {};
     (($v_head:ident $(,$v:ident)*), ($t_head:ident $(,$t:ident)*), ($e_head:ident $(,$e:ident)*), ($i_head:tt $(,$i:tt)*)) => {
@@ -9,7 +11,7 @@ macro_rules! tuple {
 #[derive(Debug, PartialEq, Clone)]
 pub struct $e< $($t),* >($(pub Option<$t>),*);
 
-impl<$($v: crate::Validator<$t>, $t),*> crate::Validator<( $($t),* )> for ($($v),*) {
+impl<$($v: Validator<$t>, $t),*> Validator<( $($t),* )> for ($($v),*) {
     type Error = $e< $($v::Error),* >;
 
     fn validate(&self, value: &( $($t),* )) -> Result<(), Self::Error> {

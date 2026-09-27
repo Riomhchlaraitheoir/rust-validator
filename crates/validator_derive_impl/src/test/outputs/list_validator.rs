@@ -19,7 +19,8 @@ struct HasListValidator {
 }
 impl ::validator::Validator<HasList> for HasListValidator {
     type Error = HasListValidationErrors;
-    fn validate(&self, HasList { list }: &HasList) -> Result<(), Self::Error> {
+    #[allow(non_shorthand_field_patterns)]
+    fn validate(&self, HasList { list: list }: &HasList) -> Result<(), Self::Error> {
         let mut _valid = true;
         let validator = self;
         let error = HasListValidationErrors {

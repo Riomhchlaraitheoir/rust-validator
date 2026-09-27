@@ -1,5 +1,5 @@
+use crate::{ErrorString, ToErrors, Validator};
 use thiserror::Error;
-use crate::Validator;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct And<A, B>(A, B);
@@ -12,6 +12,20 @@ pub enum AndError<A, B> {
     Right(B),
     #[error("{0} and {1}")]
     Both(A, B)
+}
+
+impl<A, B> ToErrors for AndError<A, B> where A: ToErrors, B: ToErrors
+{
+    fn build_errors(&self, errors: &mut Vec<ErrorString>) {
+        match self {
+            AndError::Left(a) => a.build_errors(errors),
+            AndError::Right(b) => b.build_errors(errors),
+            AndError::Both(a, b) => {
+                a.build_errors(errors);
+                b.build_errors(errors);
+            },
+        }
+    }
 }
 
 impl<A, B> From<AndError<A, B>> for (Option<A>, Option<B>) {

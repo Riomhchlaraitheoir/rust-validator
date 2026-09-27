@@ -1,12 +1,24 @@
-use std::ops::Index;
-
 use crate::{Validate, Validator};
+use std::fmt::Display;
+use std::ops::Index;
+use thiserror::Error;
 
 pub struct ElementsValidator<V>(V);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Error)]
 pub struct ElementsInvalid<E> {
     errors: Vec<Option<E>>
+}
+
+impl<E: Display> Display for ElementsInvalid<E> {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        for error in &self.errors {
+            if let Some(error) = error.as_ref() {
+                write!(f, "{error}, ")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 pub trait HasElements {

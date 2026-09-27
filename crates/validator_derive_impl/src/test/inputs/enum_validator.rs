@@ -1,4 +1,4 @@
-
+#[derive(Validator)]
 enum Request {
     Signup {
         #[validator(email)]

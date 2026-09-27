@@ -1,19 +1,31 @@
+use crate::{ErrorString, ToErrors, Validator};
 use thiserror::Error;
-use crate::Validator;
 
-pub struct LengthValidator(Option<usize>, Option<usize>);
+pub struct LengthValidator {
+    field: &'static str,
+    min: Option<usize>,
+    max: Option<usize>,
+}
 
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum InvalidLengthError {
-    #[error("value of length {len} exceeds maximum of {max}")]
+    #[error("{field} length is {len}, should be less than {max}")]
     TooLong {
+        field: &'static str,
         max: usize,
         len: usize
     },
-    #[error("value of length {len} falls short of minimum of {min}")]
+    #[error("{field} length is {len}, should be more than {min}")]
     TooShort {
+        field: &'static str,
         min: usize,
         len: usize
+    }
+}
+
+impl ToErrors for InvalidLengthError {
+    fn build_errors(&self, errors: &mut Vec<ErrorString>) {
+        errors.push(self.to_string().into());
     }
 }
 
@@ -22,8 +34,8 @@ pub(crate) trait HasLength {
 }
 
 impl LengthValidator {
-    pub fn new(min: Option<usize>, max: Option<usize>) -> Self {
-        Self(min, max)
+    pub fn new(field: &'static str, min: Option<usize>, max: Option<usize>) -> Self {
+        Self { field, min, max }
     }
 }
 
@@ -32,15 +44,15 @@ impl<T: HasLength + ?Sized> Validator<T> for LengthValidator {
 
     fn validate(&self, value: &T) -> Result<(), Self::Error> {
         let len = value._len();
-        let Self(min, max) = self;
+        let Self { field, min, max } = self;
         if let Some(&min) = min.as_ref() {
             if len < min {
-                return Err(InvalidLengthError::TooShort { min, len })
+                return Err(InvalidLengthError::TooShort { field, min, len })
             }
         }
         if let Some(&max) = max.as_ref() {
             if len > max {
-                return Err(InvalidLengthError::TooLong { max, len })
+                return Err(InvalidLengthError::TooLong { field, max, len })
             }
         }
         Ok(())
