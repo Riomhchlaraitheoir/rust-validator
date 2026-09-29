@@ -13,7 +13,7 @@ macro_rules! modules {
     };
 }
 
-modules!(length, not_empty, and, or, ip, email, url, elements, tuple, range, matches);
+modules!(length, not_empty, and, or, ip, email, url, elements, tuple, range, matches, parse_as);
 
 pub type ValidationErrors<V> = <<V as Validate>::Validator as Validator<V>>::Error;
 

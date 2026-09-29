@@ -38,7 +38,7 @@ impl ::validator::Validator<SignupForm> for SignupFormValidator {
                 }
             },
             confirm_password: {
-                match validator.confirm_password.validate((confirm_password, password)) {
+                match validator.confirm_password.validate(&(confirm_password, password)) {
                     Ok(()) => None,
                     Err(error) => {
                         _valid = false;

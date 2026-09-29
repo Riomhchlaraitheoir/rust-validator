@@ -391,6 +391,9 @@ impl Validator {
                 };
                 quote!(::validator::Matches::new(#field, #other))
             }
+            Validator::ParseAs(ty) => {
+                quote!(::validator::ParseAs::<#ty>::new(#field))
+            }
         }
     }
     fn validator_type(&self, ty: &TokenStream) -> TokenStream {
@@ -431,6 +434,9 @@ impl Validator {
             }
             Validator::Matches(_) => {
                 quote!(::validator::Matches)
+            }
+            Validator::ParseAs(ty) => {
+                quote!(::validator::ParseAs<#ty>)
             }
         }
     }
@@ -477,6 +483,9 @@ impl Validator {
             }
             Validator::Matches(_) => {
                 quote!(::validator::MatchesError)
+            }
+            Validator::ParseAs(ty) => {
+                quote!(::validator::ParseAsError<#ty>)
             }
         }
     }

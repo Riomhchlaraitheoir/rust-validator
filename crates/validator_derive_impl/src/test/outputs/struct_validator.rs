@@ -112,19 +112,30 @@ impl ::validator::Validate for SignupData {
 #[derive(Debug, PartialEq, Clone, Default)]
 struct DogValidationErrors {
     name: Option<::validator::EmptyValueError>,
+    age: Option<::validator::ParseAsError<u32>>,
 }
 struct DogValidator {
     name: ::validator::NotEmptyValidator,
+    age: ::validator::ParseAs<u32>
 }
 impl ::validator::Validator<Dog> for DogValidator {
     type Error = DogValidationErrors;
     #[allow(non_shorthand_field_patterns)]
-    fn validate(&self, Dog { name: name }: &Dog) -> Result<(), Self::Error> {
+    fn validate(&self, Dog { name: name, age: age }: &Dog) -> Result<(), Self::Error> {
         let mut _valid = true;
         let validator = self;
         let error = DogValidationErrors {
             name: {
                 match validator.name.validate(name) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            },
+            age: {
+                match validator.age.validate(age) {
                     Ok(()) => None,
                     Err(error) => {
                         _valid = false;
@@ -141,6 +152,7 @@ impl ::validator::Validate for Dog {
     fn validator() -> Self::Validator {
         DogValidator {
             name: ::validator::NotEmptyValidator::new("name"),
+            age: ::validator::ParseAs::<u32>::new("age"),
         }
     }
 }

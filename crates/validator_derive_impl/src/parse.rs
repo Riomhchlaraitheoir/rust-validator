@@ -303,6 +303,12 @@ impl Parse for Validator {
                 let other = content.parse()?;
                 Ok(Validator::Matches(other))
             }
+            "parse_as" => {
+                let content;
+                parenthesized!(content in input);
+                let ty = content.parse()?;
+                Ok(Validator::ParseAs(ty))
+            }
             other => Err(syn::Error::new(
                 ident.span(),
                 format!("unknown validator type: \"{other}\""),

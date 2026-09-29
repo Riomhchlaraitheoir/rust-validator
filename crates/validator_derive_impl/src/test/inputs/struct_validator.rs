@@ -16,4 +16,6 @@ struct SignupData {
 struct Dog {
     #[validator(not_empty)]
     name: String,
+    #[validator(parse_as(u32))]
+    age: String
 }
