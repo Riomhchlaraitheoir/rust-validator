@@ -394,6 +394,11 @@ impl Validator {
             Validator::ParseAs(ty) => {
                 quote!(::validator::ParseAs::<#ty>::new(#field))
             }
+            Validator::Option(inner) => {
+                let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
+                let inner = inner.create(field, &ty);
+                quote!(::validator::OptionValidator::new(#inner))
+            }
         }
     }
     fn validator_type(&self, ty: &TokenStream) -> TokenStream {
@@ -437,6 +442,11 @@ impl Validator {
             }
             Validator::ParseAs(ty) => {
                 quote!(::validator::ParseAs<#ty>)
+            }
+            Validator::Option(inner) => {
+                let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
+                let inner = inner.validator_type(&ty);
+                quote!(::validator::OptionValidator<#inner>)
             }
         }
     }
@@ -486,6 +496,10 @@ impl Validator {
             }
             Validator::ParseAs(ty) => {
                 quote!(::validator::ParseAsError<#ty>)
+            }
+            Validator::Option(inner) => {
+                let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
+                inner.error_type(&ty)
             }
         }
     }

@@ -68,7 +68,8 @@ enum Validator {
     Tuple(Vec<Self>),
     Range(ExprRange),
     Matches(Member),
-    ParseAs(Box<Type>)
+    ParseAs(Box<Type>),
+    Option(Box<Self>),
 }
 
 trait WithMessage {

@@ -2,13 +2,19 @@ use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::str::FromStr;
 use thiserror::Error;
-use crate::Validator;
+use crate::{ErrorString, ToErrors, Validator};
 
 #[derive(Clone, Error)]
 #[error("Failed to parse {field}: {inner}")]
 pub struct ParseAsError<T: FromStr<Err: Debug + Display>> {
     inner: T::Err,
     field: &'static str,
+}
+
+impl<T: FromStr<Err: Debug + Display>> ToErrors for ParseAsError<T> {
+    fn build_errors(&self, errors: &mut Vec<ErrorString>) {
+        errors.push(self.inner.to_string().into())
+    }
 }
 
 impl<T: FromStr<Err: Debug + Display + PartialEq>> PartialEq for ParseAsError<T> {

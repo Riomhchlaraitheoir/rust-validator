@@ -186,18 +186,18 @@ impl Parse for Validator {
             .with_message("failed to parse validator type")?;
         let val_type = ident.to_string();
         match val_type.as_str() {
-            "not_empty" => Ok(Validator::NotEmpty),
-            "email" => Ok(Validator::Email),
-            "url" => Ok(Validator::Url),
-            "ip" => Ok(Validator::IpAddr),
-            "ignore" => Ok(Validator::Ignore),
-            "elements" => Ok(Validator::Elements({
+            "not_empty" => Ok(Self::NotEmpty),
+            "email" => Ok(Self::Email),
+            "url" => Ok(Self::Url),
+            "ip" => Ok(Self::IpAddr),
+            "ignore" => Ok(Self::Ignore),
+            "elements" => Ok(Self::Elements({
                 Box::new(if input.peek(token::Paren) {
                     let content;
                     parenthesized!(content in input);
                     content.parse()?
                 } else {
-                    Validator::Default
+                    Self::Default
                 })
             })),
             "length" => {
@@ -247,9 +247,9 @@ impl Parse for Validator {
                         ));
                     }
 
-                    Ok(Validator::Length(Some(equal), Some(equal)))
+                    Ok(Self::Length(Some(equal), Some(equal)))
                 } else if min.is_some() || max.is_some() {
-                    Ok(Validator::Length(min, max))
+                    Ok(Self::Length(min, max))
                 } else {
                     Err(syn::Error::new(
                         val_type.span(),
@@ -270,8 +270,8 @@ impl Parse for Validator {
                     .parse()
                     .with_message("failed to parse binary right")?;
                 Ok(match val_type.as_str() {
-                    "and" => Validator::And(Box::new(left), Box::new(right)),
-                    "or" => Validator::Or(Box::new(left), Box::new(right)),
+                    "and" => Self::And(Box::new(left), Box::new(right)),
+                    "or" => Self::Or(Box::new(left), Box::new(right)),
                     _ => unreachable!(),
                 })
             }
@@ -289,25 +289,31 @@ impl Parse for Validator {
                         break;
                     }
                 }
-                Ok(Validator::Tuple(children))
+                Ok(Self::Tuple(children))
             }
             "range" => {
                 let content;
                 parenthesized!(content in input);
                 let range: ExprRange = content.parse()?;
-                Ok(Validator::Range(range))
+                Ok(Self::Range(range))
             }
             "matches" => {
                 let content;
                 parenthesized!(content in input);
                 let other = content.parse()?;
-                Ok(Validator::Matches(other))
+                Ok(Self::Matches(other))
             }
             "parse_as" => {
                 let content;
                 parenthesized!(content in input);
                 let ty = content.parse()?;
-                Ok(Validator::ParseAs(ty))
+                Ok(Self::ParseAs(ty))
+            }
+            "option" => {
+                let content;
+                parenthesized!(content in input);
+                let validate = content.parse()?;
+                Ok(Self::Option(validate))
             }
             other => Err(syn::Error::new(
                 ident.span(),
