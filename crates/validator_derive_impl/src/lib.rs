@@ -60,7 +60,7 @@ enum Validator {
     Email,
     Url,
     IpAddr,
-    Length(Option<usize>, Option<usize>),
+    Length(ExprRange),
     Elements(Box<Self>),
     #[default]
     Default,

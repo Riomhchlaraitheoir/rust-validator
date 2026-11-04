@@ -1,7 +1,7 @@
 use crate::{EnumVariant, Field, Input, InputData, StructFields, Validator};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{ExprRange, Index, Member, RangeLimits};
+use syn::{parse_quote, ExprRange, Index, Member, RangeLimits};
 
 impl StructFields {
     fn validator_fields(&self) -> TokenStream {
@@ -361,9 +361,19 @@ impl Validator {
             Validator::Email => quote!(::validator::EmailValidator::new(#field)),
             Validator::Url => quote!(::validator::UrlValidator::new(#field)),
             Validator::IpAddr => quote!(::validator::IpAddrValidator::new(#field)),
-            Validator::Length(min, max) => {
-                let min = option_literal(min.as_ref());
-                let max = option_literal(max.as_ref());
+            Validator::Length(range) => {
+                let min = option_literal(range.start.as_ref());
+                let max = option_literal({
+                    if let Some(end) = &range.end {
+                        if let RangeLimits::HalfOpen(..) = range.limits {
+                            Some(parse_quote!(#end-1))
+                        } else {
+                            Some(end.clone())
+                        }
+                    } else {
+                        None
+                    }
+                });
                 quote!(::validator::LengthValidator::new(#field, #min, #max))
             }
             Validator::Default => quote!(<#ty as ::validator::Validate>::validator()),
@@ -417,7 +427,7 @@ impl Validator {
             Validator::Email => quote!(::validator::EmailValidator),
             Validator::Url => quote!(::validator::UrlValidator),
             Validator::IpAddr => quote!(::validator::IpAddrValidator),
-            Validator::Length(_, _) => quote!(::validator::LengthValidator),
+            Validator::Length(_) => quote!(::validator::LengthValidator),
             Validator::Default => quote!(<#ty as ::validator::Validate>::Validator),
             Validator::Elements(elements) => {
                 let element_type = quote!(<#ty as ::validator::HasElements>::Item);
@@ -466,7 +476,7 @@ impl Validator {
             Validator::Email => quote!(::validator::InvalidEmailError),
             Validator::Url => quote!(::validator::UrlValidationError),
             Validator::IpAddr => quote!(::std::net::AddrParseError),
-            Validator::Length(_, _) => quote!(::validator::InvalidLengthError),
+            Validator::Length(_) => quote!(::validator::InvalidLengthError),
             Validator::Default => {
                 quote!(<<#ty as ::validator::Validate>::Validator as ::validator::Validator<#ty>>::Error)
             }
@@ -559,7 +569,7 @@ fn range_type(range: &ExprRange, value: &TokenStream) -> TokenStream {
     }
 }
 
-fn option_literal<T: ToTokens>(opt: Option<T>) -> TokenStream {
+fn option_literal(opt: Option<impl ToTokens>) -> TokenStream {
     match opt {
         None => quote! { None },
         Some(value) => quote! { Some(#value) },

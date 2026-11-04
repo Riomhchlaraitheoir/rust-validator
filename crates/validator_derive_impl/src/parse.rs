@@ -203,59 +203,8 @@ impl Parse for Validator {
             "length" => {
                 let content;
                 parenthesized!(content in input);
-                let mut equal_name = None;
-                let mut equal = None;
-                let mut min = None;
-                let mut max = None;
-                loop {
-                    let name: Ident = content
-                        .parse()
-                        .with_message("failed to parse length option name")?;
-                    content
-                        .parse::<Token![=]>()
-                        .with_message("failed to parse length option '=' token")?;
-                    let value: LitInt = content
-                        .parse()
-                        .with_message("failed to parse length option value")?;
-                    let value: usize = value.base10_parse().map_err(|err| {
-                        syn::Error::new(value.span(), format!("failed to parse usize: {err}"))
-                    })?;
-                    match name.to_string().as_str() {
-                        "equal" => {
-                            equal_name = Some(name);
-                            equal = Some(value)
-                        }
-                        "min" => min = Some(value),
-                        "max" => max = Some(value),
-                        other => {
-                            return Err(syn::Error::new(
-                                name.span(),
-                                format!(r#"unknown option: "{other}""#),
-                            ))
-                        }
-                    }
-                    if Comma::parse(&content).is_err() {
-                        break;
-                    }
-                }
-
-                if let Some(equal) = equal {
-                    if min.is_some() || max.is_some() {
-                        return Err(syn::Error::new(
-                            equal_name.unwrap().span(),
-                            "cannot use 'equal' with either 'min' or 'max'",
-                        ));
-                    }
-
-                    Ok(Self::Length(Some(equal), Some(equal)))
-                } else if min.is_some() || max.is_some() {
-                    Ok(Self::Length(min, max))
-                } else {
-                    Err(syn::Error::new(
-                        val_type.span(),
-                        "no options found, one of 'equal', 'min', 'max' must be set",
-                    ))
-                }
+                let range: ExprRange = content.parse()?;
+                Ok(Self::Length(range))
             }
             "and" | "or" => {
                 let content;
