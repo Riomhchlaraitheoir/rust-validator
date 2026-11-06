@@ -2,8 +2,7 @@ use crate::*;
 use proc_macro2::Ident;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::spanned::Spanned;
-use syn::token::Comma;
-use syn::{parenthesized, token, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprLit, ExprRange, Fields, Index, Lit, LitInt, LitStr, Member, Meta, Token};
+use syn::{parenthesized, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, ExprLit, Fields, Index, Lit, LitStr, Member, Meta};
 
 impl Parse for Input {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -138,7 +137,7 @@ fn parse_struct_input(data: &DataStruct) -> syn::Result<InputData> {
     })
 }
 
-fn parse_attrs(attrs: Vec<Attribute>) -> Result<(Validator, Option<LitStr>), syn::Error> {
+fn parse_attrs(attrs: Vec<Attribute>) -> Result<(Box<dyn Validator>, Option<LitStr>), syn::Error> {
     let mut label = None;
     for attr in &attrs {
         if let Meta::NameValue(list) = &attr.meta {
@@ -167,107 +166,119 @@ fn parse_attrs(attrs: Vec<Attribute>) -> Result<(Validator, Option<LitStr>), syn
         ));
     }
     let Some(&attr) = attr.first() else {
-        return Ok((Validator::default(), label));
+        return Ok((Box::new(Default), label));
     };
 
     let Meta::List(list) = &attr.meta else {
-        return Ok((Validator::default(), label));
+        return Ok((Box::new(Default), label));
     };
-    let validator = Validator::parse
+    let validator = Parse::parse
         .parse2(list.tokens.clone())
         .with_message("failed to parse validator")?;
     Ok((validator, label))
 }
 
-impl Parse for Validator {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let ident: Ident = input
-            .parse()
-            .with_message("failed to parse validator type")?;
-        let val_type = ident.to_string();
-        match val_type.as_str() {
-            "not_empty" => Ok(Self::NotEmpty),
-            "email" => Ok(Self::Email),
-            "url" => Ok(Self::Url),
-            "ip" => Ok(Self::IpAddr),
-            "ignore" => Ok(Self::Ignore),
-            "elements" => Ok(Self::Elements({
-                Box::new(if input.peek(token::Paren) {
+macro_rules! validator_type_parse {
+    ($($validator:ident$(($($arg:tt)*))?),* $(,)?) => {
+        $(
+        validator_type_parse!(#$validator $(($($arg)*))?);
+        )*
+    };
+    (#$validator:ident) => {
+        impl Parse for $validator {
+            fn parse(_: ParseStream) -> syn::Result<Self> {
+                Ok(Self)
+            }
+        }
+    };
+    (#$validator:ident(Punctuated)) => {
+        impl Parse for $validator {
+            fn parse(input: ParseStream) -> syn::Result<Self> {
+                let content;
+                parenthesized!(content in input);
+                let children = Punctuated::parse_separated_nonempty(&content)?;
+                Ok(Self(children))
+            }
+        }
+    };
+    (#$validator:ident(_)) => {
+        impl Parse for $validator {
+            fn parse(input: ParseStream) -> syn::Result<Self> {
+                let content;
+                parenthesized!(content in input);
+                let arg = content.parse()?;
+                Ok(Self(arg))
+            }
+        }
+    };
+    (#$validator:ident(_?)) => {
+        impl Parse for $validator {
+            fn parse(input: ParseStream) -> syn::Result<Self> {
+                let arg = if input.peek(syn::token::Paren) {
                     let content;
                     parenthesized!(content in input);
                     content.parse()?
                 } else {
-                    Self::Default
-                })
-            })),
-            "length" => {
-                let content;
-                parenthesized!(content in input);
-                let range: ExprRange = content.parse()?;
-                Ok(Self::Length(range))
+                    Box::new(Default)
+                };
+                Ok(Self(arg))
             }
-            "and" | "or" => {
-                let content;
-                parenthesized!(content in input);
-                let left = content
-                    .parse()
-                    .with_message("failed to parse binary left")?;
-                let _ = content
-                    .parse::<Token![,]>()
-                    .with_message("failed to parse binary comma")?;
-                let right = content
-                    .parse()
-                    .with_message("failed to parse binary right")?;
-                Ok(match val_type.as_str() {
-                    "and" => Self::And(Box::new(left), Box::new(right)),
-                    "or" => Self::Or(Box::new(left), Box::new(right)),
-                    _ => unreachable!(),
-                })
-            }
-            "tuple" => {
-                let content;
-                parenthesized!(content in input);
-                let mut children = Vec::new();
-                loop {
-                    let child = content.parse().with_message(&format!(
-                        "failed to parse tuple child {i}",
-                        i = children.len()
-                    ))?;
-                    children.push(child);
-                    if Comma::parse(&content).is_err() {
-                        break;
-                    }
-                }
-                Ok(Self::Tuple(children))
-            }
-            "range" => {
-                let content;
-                parenthesized!(content in input);
-                let range: ExprRange = content.parse()?;
-                Ok(Self::Range(range))
-            }
-            "matches" => {
-                let content;
-                parenthesized!(content in input);
-                let other = content.parse()?;
-                Ok(Self::Matches(other))
-            }
-            "parse_as" => {
-                let content;
-                parenthesized!(content in input);
-                let ty = content.parse()?;
-                Ok(Self::ParseAs(ty))
-            }
-            "option" => {
-                let content;
-                parenthesized!(content in input);
-                let validate = content.parse()?;
-                Ok(Self::Option(validate))
-            }
-            other => Err(syn::Error::new(
-                ident.span(),
-                format!("unknown validator type: \"{other}\""),
-            )),
         }
-    }
+    };
+}
+
+validator_type_parse![
+    NotEmpty,
+    Email,
+    Url,
+    IpAddr,
+    Default,
+    Ignore,
+    And(Punctuated),
+    Or(Punctuated),
+    Tuple(Punctuated),
+    Length(_),
+    Elements(_?),
+    Range(_),
+    Matches(_),
+    ParseAs(_),
+    Optional(_),
+];
+
+macro_rules! validator_parse {
+    ($($tag:literal => $validator:ident),* $(,)?) => {
+        impl Parse for Box<dyn Validator> {
+            fn parse(input: ParseStream) -> syn::Result<Self> {
+                let ident: Ident = input
+                    .parse()
+                    .with_message("failed to parse validator type")?;
+                match ident.to_string().as_str() {
+                    $(
+                    $tag => Ok(Box::new(input.parse::<$validator>()?)),
+                    )*
+                    other => Err(syn::Error::new(
+                        ident.span(),
+                        format!("unknown validator type: \"{other}\""),
+                    )),
+                }
+            }
+        }
+    };
+}
+
+validator_parse!{
+    "not_empty" => NotEmpty,
+    "and" => And,
+    "or" => Or,
+    "email" => Email,
+    "url" => Url,
+    "ip_addr" => IpAddr,
+    "length" => Length,
+    "elements" => Elements,
+    "ignore" => Ignore,
+    "tuple" => Tuple,
+    "range" => Range,
+    "matches" => Matches,
+    "parse_as" => ParseAs,
+    "option" => Optional,
 }

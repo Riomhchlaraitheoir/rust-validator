@@ -1,0 +1,29 @@
+#![allow(dead_code)]
+
+use validator_derive::Validator;
+
+fn main() {
+
+}
+
+#[derive(Validator)]
+struct SignupData {
+    #[validator(email)]
+    mail: String,
+    #[validator(url)]
+    site: String,
+    #[validator(not_empty)]
+    first_name: String,
+    #[validator(range(18..))]
+    age: u8,
+    #[validator(and(elements, length(1..)))]
+    dogs: Vec<Dog>
+}
+
+#[derive(Validator)]
+struct Dog {
+    #[validator(not_empty)]
+    name: String,
+    #[validator(parse_as(u32))]
+    age: String
+}

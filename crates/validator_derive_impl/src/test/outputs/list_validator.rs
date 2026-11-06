@@ -17,6 +17,7 @@ struct HasListValidator {
         > as ::validator::HasElements>::Item as ::validator::Validate>::Validator,
     >,
 }
+#[automatically_derived]
 impl ::validator::Validator<HasList> for HasListValidator {
     type Error = HasListValidationErrors;
     #[allow(non_shorthand_field_patterns)]
@@ -37,6 +38,7 @@ impl ::validator::Validator<HasList> for HasListValidator {
         if _valid { Ok(()) } else { Err(error) }
     }
 }
+#[automatically_derived]
 impl ::validator::Validate for HasList {
     type Validator = HasListValidator;
     fn validator() -> Self::Validator {

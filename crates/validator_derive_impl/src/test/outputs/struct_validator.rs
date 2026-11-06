@@ -31,6 +31,7 @@ struct SignupDataValidator {
         ::validator::LengthValidator,
     >,
 }
+#[automatically_derived]
 impl ::validator::Validator<SignupData> for SignupDataValidator {
     type Error = SignupDataValidationErrors;
     #[allow(non_shorthand_field_patterns)]
@@ -90,6 +91,7 @@ impl ::validator::Validator<SignupData> for SignupDataValidator {
         if _valid { Ok(()) } else { Err(error) }
     }
 }
+#[automatically_derived]
 impl ::validator::Validate for SignupData {
     type Validator = SignupDataValidator;
     fn validator() -> Self::Validator {
@@ -104,7 +106,7 @@ impl ::validator::Validate for SignupData {
                         Dog,
                     > as ::validator::HasElements>::Item as ::validator::Validate>::validator(),
                 ),
-                ::validator::LengthValidator::new("dogs", Some(1usize), None),
+                ::validator::LengthValidator::new("dogs", 1..),
             ),
         }
     }
@@ -118,6 +120,7 @@ struct DogValidator {
     name: ::validator::NotEmptyValidator,
     age: ::validator::ParseAs<u32>
 }
+#[automatically_derived]
 impl ::validator::Validator<Dog> for DogValidator {
     type Error = DogValidationErrors;
     #[allow(non_shorthand_field_patterns)]
@@ -147,6 +150,7 @@ impl ::validator::Validator<Dog> for DogValidator {
         if _valid { Ok(()) } else { Err(error) }
     }
 }
+#[automatically_derived]
 impl ::validator::Validate for Dog {
     type Validator = DogValidator;
     fn validator() -> Self::Validator {

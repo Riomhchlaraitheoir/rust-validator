@@ -9,6 +9,7 @@ struct SignupDataValidator(
     ::validator::UrlValidator,
     ::validator::LengthValidator,
 );
+#[automatically_derived]
 impl ::validator::Validator<SignupData> for SignupDataValidator {
     type Error = SignupDataValidationErrors;
     #[allow(non_shorthand_field_patterns)]
@@ -50,13 +51,14 @@ impl ::validator::Validator<SignupData> for SignupDataValidator {
         if _valid { Ok(()) } else { Err(error) }
     }
 }
+#[automatically_derived]
 impl ::validator::Validate for SignupData {
     type Validator = SignupDataValidator;
     fn validator() -> Self::Validator {
         SignupDataValidator {
             0: ::validator::EmailValidator::new("0"),
             1: ::validator::UrlValidator::new("1"),
-            2: ::validator::LengthValidator::new("2", Some(1usize), None),
+            2: ::validator::LengthValidator::new("2", 1..),
         }
     }
 }

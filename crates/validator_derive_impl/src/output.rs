@@ -1,13 +1,16 @@
-use crate::{EnumVariant, Field, Input, InputData, StructFields, Validator};
+use crate::{
+    And, Default, Elements, Email, EnumVariant, Field, Ignore, Input, InputData, IpAddr, Length,
+    Matches, NotEmpty, Optional, Or, ParseAs, Range, StructFields, Tuple, Url,
+};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{parse_quote, ExprRange, Index, Member, RangeLimits};
+use syn::{ExprRange, Index, Member, RangeLimits};
 
 impl StructFields {
     fn validator_fields(&self) -> TokenStream {
         let fields = self.fields.iter().map(Field::define_validator_field);
         if self.named_fields {
-            quote!{{#(#fields),*}}
+            quote! {{#(#fields),*}}
         } else {
             quote!((#(#fields),*))
         }
@@ -16,7 +19,7 @@ impl StructFields {
     fn error_definition(&self) -> TokenStream {
         let fields = self.fields.iter().map(Field::error_field);
         if self.named_fields {
-            quote!{{
+            quote! {{
                 #(#fields),*
             }}
         } else {
@@ -30,6 +33,7 @@ impl StructFields {
 impl Input {
     pub fn generate_output(&self) -> TokenStream {
         let mut output = TokenStream::new();
+
         output.extend(self.error_definition());
         output.extend(self.validator());
         output.extend(self.validate_impl());
@@ -50,7 +54,10 @@ impl Input {
             InputData::Struct { fields, .. } => {
                 if fields.named_fields {
                     let members = fields.fields.iter().map(|f| &f.name);
-                    let types = fields.fields.iter().map(|f| f.validator.error_type(&f.ty.to_token_stream()));
+                    let types = fields
+                        .fields
+                        .iter()
+                        .map(|f| f.validator.error_type(&f.ty.to_token_stream()));
                     let field_vis = fields.fields.iter().map(|f| &f.vis);
                     quote! {
                         #[derive(Debug, PartialEq, Clone, Default)]
@@ -59,7 +66,10 @@ impl Input {
                         }
                     }
                 } else {
-                    let types = fields.fields.iter().map(|f| f.validator.error_type(&f.ty.to_token_stream()));
+                    let types = fields
+                        .fields
+                        .iter()
+                        .map(|f| f.validator.error_type(&f.ty.to_token_stream()));
                     quote! {
                         #[derive(Debug, PartialEq, Clone, Default)]
                         #vis struct #error_type(#(Option<#types>,)*);
@@ -104,6 +114,7 @@ impl Input {
                 quote! {
                     #vis struct #name #define_validator_fields #semi_token
 
+                    #[automatically_derived]
                     impl ::validator::Validator<#derived_type> for #name {
                         type Error = #error;
                         #[allow(non_shorthand_field_patterns)]
@@ -172,8 +183,10 @@ impl Input {
 
                     struct #validator_type(#(#variant_validator_names),*);
 
+                    #[automatically_derived]
                     impl ::validator::Validator<#derived_type> for #validator_type {
                         type Error = #error_type;
+                        #[allow(non_shorthand_field_patterns)]
                         fn validate(&self, value: &#derived_type) -> Result<(), Self::Error> {
                             match value {
                                 #(#match_arms),*
@@ -201,13 +214,15 @@ impl Input {
                 let members = fields.iter().map(|f| &f.name);
 
                 quote! {
+                    #[automatically_derived]
                     impl ::validator::Validate for #derived_type {
                         type Validator = #validator_type;
-                            fn validator() -> Self::Validator {
-                                #validator_type {
-                                    #(#members: #create_validator),*
-                                }
+
+                        fn validator() -> Self::Validator {
+                            #validator_type {
+                                #(#members: #create_validator),*
                             }
+                        }
                     }
                 }
             }
@@ -216,6 +231,7 @@ impl Input {
                 let create_validator = variants.iter().filter_map(EnumVariant::create_validator);
                 let members = (0..variants.len()).map(syn::Index::from);
                 quote! {
+                    #[automatically_derived]
                     impl ::validator::Validate for #derived_type {
                         type Validator = #validator_type;
                         fn validator() -> Self::Validator {
@@ -256,33 +272,13 @@ impl Field {
     }
 
     fn validate_field(&self) -> TokenStream {
-        let name = self.name.clone();
         let field = self.pattern_name();
-        let other = match &self.validator {
-            Validator::Matches(Member::Named(name)) => Some(name.clone()),
-            Validator::Matches(Member::Unnamed(index)) => Some(format_ident!("value{}", index.index)),
-            _ => None
-        };
-        let args = if let Some(other) = other {
-            quote!(&(#field, #other))
-        } else {
-            quote!(#field)
-        };
-        quote!(
-            {
-                match validator.#name.validate(#args) {
-                    Ok(()) => None,
-                    Err(error) => {
-                        _valid = false;
-                        Some(error)
-                    }
-                }
-            }
-        )
+        self.validator.validate(&self.name, &field)
     }
 
     fn create_validator(&self) -> TokenStream {
-        self.validator.create(&self.label, &self.ty.to_token_stream())
+        self.validator
+            .create(&self.label, &self.ty.to_token_stream())
     }
 
     fn field(&self, ty: TokenStream) -> TokenStream {
@@ -325,7 +321,7 @@ impl EnumVariant {
         let validator_name = self.validator_name();
         let validator_fields = fields.fields.iter().map(Field::define_validator_field);
         let validator_fields = if fields.named_fields {
-            quote!{{#(#validator_fields),*}}
+            quote! {{#(#validator_fields),*}}
         } else {
             quote!((#(#validator_fields),*);)
         };
@@ -341,177 +337,6 @@ impl EnumVariant {
         Some(quote! {
             #name #fields
         })
-    }
-}
-
-impl Validator {
-    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
-        match self {
-            Validator::NotEmpty => quote!(::validator::NotEmptyValidator::new(#field)),
-            Validator::And(left, right) => {
-                let left = left.create(field, ty);
-                let right = right.create(field, ty);
-                quote!(::validator::And::new(#left, #right))
-            }
-            Validator::Or(left, right) => {
-                let left = left.create(field, ty);
-                let right = right.create(field, ty);
-                quote!(::validator::Or::new(#left, #right))
-            }
-            Validator::Email => quote!(::validator::EmailValidator::new(#field)),
-            Validator::Url => quote!(::validator::UrlValidator::new(#field)),
-            Validator::IpAddr => quote!(::validator::IpAddrValidator::new(#field)),
-            Validator::Length(range) => {
-                let min = option_literal(range.start.as_ref());
-                let max = option_literal({
-                    if let Some(end) = &range.end {
-                        if let RangeLimits::HalfOpen(..) = range.limits {
-                            Some(parse_quote!(#end-1))
-                        } else {
-                            Some(end.clone())
-                        }
-                    } else {
-                        None
-                    }
-                });
-                quote!(::validator::LengthValidator::new(#field, #min, #max))
-            }
-            Validator::Default => quote!(<#ty as ::validator::Validate>::validator()),
-            Validator::Elements(elements) => {
-                let element_type = quote!(<#ty as ::validator::HasElements>::Item);
-                let elements = elements.create(field, &element_type);
-                quote!(::validator::ElementsValidator::new(#elements))
-            }
-            Validator::Tuple(children) => {
-                let children = children.iter().map(|child| child.create(field, ty));
-                quote! {
-                    (#(#children,)*)
-                }
-            }
-            Validator::Range(range) => {
-                quote!(::validator::RangeValidator::new(#field, #range))
-            }
-            Validator::Ignore => {
-                quote!(::validator::IgnoreValidator)
-            }
-            Validator::Matches(other) => {
-                let other = match other {
-                    Member::Named(name) => name.to_string(),
-                    Member::Unnamed(index) => index.index.to_string()
-                };
-                quote!(::validator::Matches::new(#field, #other))
-            }
-            Validator::ParseAs(ty) => {
-                quote!(::validator::ParseAs::<#ty>::new(#field))
-            }
-            Validator::Option(inner) => {
-                let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
-                let inner = inner.create(field, &ty);
-                quote!(::validator::OptionValidator::new(#inner))
-            }
-        }
-    }
-    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
-        match self {
-            Validator::NotEmpty => quote!(::validator::NotEmptyValidator),
-            Validator::And(left, right) => {
-                let left = left.validator_type(ty);
-                let right = right.validator_type(ty);
-                quote!(::validator::And<#left, #right>)
-            }
-            Validator::Or(left, right) => {
-                let left = left.validator_type(ty);
-                let right = right.validator_type(ty);
-                quote!(::validator::Or<#left, #right>)
-            }
-            Validator::Email => quote!(::validator::EmailValidator),
-            Validator::Url => quote!(::validator::UrlValidator),
-            Validator::IpAddr => quote!(::validator::IpAddrValidator),
-            Validator::Length(_) => quote!(::validator::LengthValidator),
-            Validator::Default => quote!(<#ty as ::validator::Validate>::Validator),
-            Validator::Elements(elements) => {
-                let element_type = quote!(<#ty as ::validator::HasElements>::Item);
-                let elements = elements.validator_type(&element_type);
-                quote!(::validator::ElementsValidator<#elements>)
-            }
-            Validator::Tuple(children) => {
-                let children = children.iter().map(|child| child.validator_type(ty));
-                quote! {
-                    (#(#children,)*)
-                }
-            }
-            Validator::Range(range) => {
-                let range = range_type(range, ty);
-                quote!(::validator::RangeValidator<#range>)
-            }
-            Validator::Ignore => {
-                quote!(::validator::IgnoreValidator)
-            }
-            Validator::Matches(_) => {
-                quote!(::validator::Matches)
-            }
-            Validator::ParseAs(ty) => {
-                quote!(::validator::ParseAs<#ty>)
-            }
-            Validator::Option(inner) => {
-                let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
-                let inner = inner.validator_type(&ty);
-                quote!(::validator::OptionValidator<#inner>)
-            }
-        }
-    }
-    fn error_type(&self, ty: &TokenStream) -> TokenStream {
-        match self {
-            Validator::NotEmpty => quote!(::validator::EmptyValueError),
-            Validator::And(left, right) => {
-                let left = left.error_type(ty);
-                let right = right.error_type(ty);
-                quote!(::validator::AndError<#left, #right>)
-            }
-            Validator::Or(left, right) => {
-                let left = left.error_type(ty);
-                let right = right.error_type(ty);
-                quote!((#left, #right))
-            }
-            Validator::Email => quote!(::validator::InvalidEmailError),
-            Validator::Url => quote!(::validator::UrlValidationError),
-            Validator::IpAddr => quote!(::std::net::AddrParseError),
-            Validator::Length(_) => quote!(::validator::InvalidLengthError),
-            Validator::Default => {
-                quote!(<<#ty as ::validator::Validate>::Validator as ::validator::Validator<#ty>>::Error)
-            }
-            Validator::Elements(elements) => {
-                let element_type = quote!(<#ty as ::validator::HasElements>::Item);
-                let elements = elements.error_type(&element_type);
-                quote!(::validator::ElementsInvalid<#elements>)
-            }
-            Validator::Tuple(children) => {
-                let error = &format_ident!("TupleError{}", children.len());
-                let children = children
-                    .iter()
-                    .map(|child| child.error_type(ty));
-                quote!(
-                    validator::#error<#(#children),*>
-                )
-            }
-            Validator::Range(range) => {
-                let range = range_type(range, ty);
-                quote!(::validator::NotInRangeError<#range>)
-            }
-            Validator::Ignore => {
-                quote!(::core::convert::Infallible)
-            }
-            Validator::Matches(_) => {
-                quote!(::validator::MatchesError)
-            }
-            Validator::ParseAs(ty) => {
-                quote!(::validator::ParseAsError<#ty>)
-            }
-            Validator::Option(inner) => {
-                let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
-                inner.error_type(&ty)
-            }
-        }
     }
 }
 
@@ -569,9 +394,274 @@ fn range_type(range: &ExprRange, value: &TokenStream) -> TokenStream {
     }
 }
 
-fn option_literal(opt: Option<impl ToTokens>) -> TokenStream {
-    match opt {
-        None => quote! { None },
-        Some(value) => quote! { Some(#value) },
+pub trait ValidatorOutput {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream;
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream;
+    fn error_type(&self, ty: &TokenStream) -> TokenStream;
+
+    fn validate(&self, name: &Member, field: &Ident) -> TokenStream {
+        quote!(
+            {
+                match validator.#name.validate(#field) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            }
+        )
+    }
+}
+
+impl ValidatorOutput for NotEmpty {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::NotEmptyValidator::new(#field))
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::NotEmptyValidator)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::EmptyValueError)
+    }
+}
+impl ValidatorOutput for And {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.create(field, ty));
+        quote!(::validator::And::new(#(#children,)*))
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.validator_type(ty));
+        quote!(::validator::And<#(#children,)*>)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.error_type(ty));
+        quote!(::validator::AndError<#(#children,)*>)
+    }
+}
+impl ValidatorOutput for Or {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.create(field, ty));
+        quote!(::validator::Or::new(#(#children,)*))
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.validator_type(ty));
+        quote!(::validator::Or<#(#children,)*>)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.error_type(ty));
+        quote!(::validator::OrError<#(#children,)*>)
+    }
+}
+impl ValidatorOutput for Email {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::EmailValidator::new(#field))
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::EmailValidator)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::InvalidEmailError)
+    }
+}
+impl ValidatorOutput for Url {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::UrlValidator::new(#field))
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::UrlValidator)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::UrlValidationError)
+    }
+}
+impl ValidatorOutput for IpAddr {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IpAddrValidator::new(#field))
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IpAddrValidator)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::std::net::AddrParseError)
+    }
+}
+impl ValidatorOutput for Length {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        let range = &self.0;
+        quote!(::validator::LengthValidator::new(#field, #range))
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::LengthValidator)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::InvalidLengthError)
+    }
+}
+impl ValidatorOutput for Elements {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
+        let element_type = quote!(<#ty as ::validator::HasElements>::Item);
+        let elements = self.0.create(field, &element_type);
+        quote!(::validator::ElementsValidator::new(#elements))
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let element_type = quote!(<#ty as ::validator::HasElements>::Item);
+        let elements = self.0.validator_type(&element_type);
+        quote!(::validator::ElementsValidator<#elements>)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let element_type = quote!(<#ty as ::validator::HasElements>::Item);
+        let elements = self.0.error_type(&element_type);
+        quote!(::validator::ElementsInvalid<#elements>)
+    }
+}
+impl ValidatorOutput for Default {
+    fn create(&self, _field: &str, ty: &TokenStream) -> TokenStream {
+        quote!(<#ty as ::validator::Validate>::validator())
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        quote!(<#ty as ::validator::Validate>::Validator)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        quote!(<<#ty as ::validator::Validate>::Validator as ::validator::Validator<#ty>>::Error)
+    }
+}
+impl ValidatorOutput for Ignore {
+    fn create(&self, _field: &str, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IgnoreValidator)
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IgnoreValidator)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::core::convert::Infallible)
+    }
+}
+impl ValidatorOutput for Tuple {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.create(field, ty));
+        quote! {
+            (#(#children,)*)
+        }
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let children = self.0.iter().map(|child| child.validator_type(ty));
+        quote! {
+            (#(#children,)*)
+        }
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let error = &format_ident!("TupleError{}", self.0.len());
+        let children = self.0.iter().map(|child| child.error_type(ty));
+        quote!(
+            validator::#error<#(#children),*>
+        )
+    }
+}
+impl ValidatorOutput for Range {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        let range = &self.0;
+        quote!(::validator::RangeValidator::new(#field, #range))
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let range = range_type(&self.0, ty);
+        quote!(::validator::RangeValidator<#range>)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let range = range_type(&self.0, ty);
+        quote!(::validator::NotInRangeError<#range>)
+    }
+}
+impl ValidatorOutput for Matches {
+    fn create(&self, field: &str, _ty: &TokenStream) -> TokenStream {
+        let other = match &self.0 {
+            Member::Named(name) => name.to_string(),
+            Member::Unnamed(index) => index.index.to_string(),
+        };
+        quote!(::validator::Matches::new(#field, #other))
+    }
+
+    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::Matches)
+    }
+
+    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
+        quote!(::validator::MatchesError)
+    }
+
+    fn validate(&self, name: &Member, field: &Ident) -> TokenStream {
+        let other = match &self.0 {
+            Member::Named(name) => name.clone(),
+            Member::Unnamed(index) => format_ident!("value{}", index.index),
+        };
+        quote!(
+            {
+                match validator.#name.validate(&(#field, #other)) {
+                    Ok(()) => None,
+                    Err(error) => {
+                        _valid = false;
+                        Some(error)
+                    }
+                }
+            }
+        )
+    }
+}
+impl ValidatorOutput for ParseAs {
+    fn create(&self, field: &str, _: &TokenStream) -> TokenStream {
+        let ty = &self.0;
+        quote!(::validator::ParseAs::<#ty>::new(#field))
+    }
+
+    fn validator_type(&self, _: &TokenStream) -> TokenStream {
+        let ty = &self.0;
+        quote!(::validator::ParseAs<#ty>)
+    }
+
+    fn error_type(&self, _: &TokenStream) -> TokenStream {
+        let ty = &self.0;
+        quote!(::validator::ParseAsError<#ty>)
+    }
+}
+impl ValidatorOutput for Optional {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
+        let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
+        let inner = self.0.create(field, &ty);
+        quote!(::validator::OptionValidator::new(#inner))
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
+        let inner = self.0.validator_type(&ty);
+        quote!(::validator::OptionValidator<#inner>)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let ty = quote!(<#ty as ::validator::OptionValue>::Inner);
+        self.0.error_type(&ty)
     }
 }

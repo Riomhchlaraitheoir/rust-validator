@@ -23,5 +23,29 @@ name = "struct_validator"
 required-features = ["derive"]
 
 [[test]]
+name = "enum_validator"
+required-features = ["derive"]
+
+[[test]]
 name = "password_validator"
+required-features = ["derive"]
+
+[[example]]
+name = "enum_validator"
+required-features = ["derive"]
+
+[[example]]
+name = "list_validator"
+required-features = ["derive"]
+
+[[example]]
+name = "password_validator"
+required-features = ["derive"]
+
+[[example]]
+name = "struct_validator"
+required-features = ["derive"]
+
+[[example]]
+name = "tuple_validator"
 required-features = ["derive"]

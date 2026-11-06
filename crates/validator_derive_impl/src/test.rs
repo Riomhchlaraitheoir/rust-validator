@@ -1,8 +1,9 @@
-use crate::Input;
+use crate::{Input, Length, Validator};
 use proc_macro2::{TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::parse::{Parse, Parser};
-use syn::{Attribute, File, Item, Meta};
+use syn::{parse_quote, Attribute, File, Item, Meta};
+use quote::quote;
 
 macro_rules! tests {
     ($($name:ident),*) => {
@@ -71,4 +72,25 @@ fn has_derive_attr(attrs: &[Attribute]) -> bool {
         }
     }
     false
+}
+
+macro_rules! validator_parse_test {
+    ($($name:ident: $input:tt => $expected:expr),*) => {
+        $(
+        #[test]
+        fn $name() {
+            let input = quote! $input;
+            validator_parse_test_case(input, $expected)
+        }
+        )*
+    }
+}
+
+fn validator_parse_test_case<V: Validator>(input: TokenStream, expected: V) {
+    let actual: Box<dyn Validator> = syn::parse2(input).expect("failed to parse input");
+    assert!(expected.equal(actual.as_ref()));
+}
+
+validator_parse_test! {
+    length: (length(1..)) => Length(parse_quote!(1..))
 }

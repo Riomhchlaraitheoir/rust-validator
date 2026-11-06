@@ -15,6 +15,7 @@ struct SignupFormValidator {
     >,
     confirm_password: ::validator::Matches,
 }
+#[automatically_derived]
 impl ::validator::Validator<SignupForm> for SignupFormValidator {
     type Error = SignupFormValidationErrors;
     #[allow(non_shorthand_field_patterns)]
@@ -50,13 +51,14 @@ impl ::validator::Validator<SignupForm> for SignupFormValidator {
         if _valid { Ok(()) } else { Err(error) }
     }
 }
+#[automatically_derived]
 impl ::validator::Validate for SignupForm {
     type Validator = SignupFormValidator;
     fn validator() -> Self::Validator {
         SignupFormValidator {
             password: ::validator::And::new(
                 ::validator::NotEmptyValidator::new("password"),
-                ::validator::LengthValidator::new("password", None, Some(20usize)),
+                ::validator::LengthValidator::new("password", ..=20),
             ),
             confirm_password: ::validator::Matches::new("confirm_password", "password"),
         }

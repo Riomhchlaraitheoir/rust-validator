@@ -4,6 +4,6 @@ struct SignupData(
     String,
     #[validator(url)]
     String,
-    #[validator(length(min = 1))]
+    #[validator(length(1..))]
     String,
 );

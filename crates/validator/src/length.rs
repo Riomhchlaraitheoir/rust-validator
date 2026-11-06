@@ -1,3 +1,5 @@
+use std::collections::Bound;
+use std::ops::RangeBounds;
 use crate::{ErrorString, ToErrors, Validator};
 use thiserror::Error;
 
@@ -34,7 +36,17 @@ pub(crate) trait HasLength {
 }
 
 impl LengthValidator {
-    pub fn new(field: &'static str, min: Option<usize>, max: Option<usize>) -> Self {
+    pub fn new(field: &'static str, range: impl RangeBounds<usize>) -> Self {
+        let min = match range.start_bound() {
+            Bound::Included(value) => Some(*value),
+            Bound::Excluded(value) => Some(*value+1),
+            Bound::Unbounded => None
+        };
+        let max = match range.end_bound() {
+            Bound::Included(value) => Some(*value),
+            Bound::Excluded(value) => Some(*value-1),
+            Bound::Unbounded => None
+        };
         Self { field, min, max }
     }
 }

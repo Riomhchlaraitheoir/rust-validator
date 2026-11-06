@@ -5,9 +5,9 @@ enum Request {
         mail: String,
         #[validator(url)]
         site: String,
-        #[validator(length(min = 1))]
+        #[validator(length(1..))]
         first_name: String,
     },
-    Login(#[validator(email)] String, #[validator(length(min = 8, max = 64))] String),
+    Login(#[validator(email)] String, #[validator(length(8..=64))] String),
     Logout
 }

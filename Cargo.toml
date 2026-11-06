@@ -3,4 +3,4 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.dependencies]
-syn = { version = "3.0.6", features = ["full"] }
+syn = { version = "3.0.6", features = ["full", "extra-traits"] }
