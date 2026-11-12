@@ -1,4 +1,5 @@
-use validator::{AndError, Validate, Validator};
+use validator::{Validate, Validator};
+use validator::and::AndError;
 
 // include!("../../validator_derive_impl/src/test/outputs/struct_validator.rs");
 #[derive(Validator)]

@@ -57,7 +57,7 @@ fn range_desc<R: RangeBounds<T>, T: Debug>(range: &R) -> String {
 
 #[cfg(test)]
 mod test {
-    use crate::{RangeValidator, Validator};
+    use crate::{range::RangeValidator, Validator};
 
     fn assert_is_in_range<R, T: PartialOrd<T>>(range: R, value: T) where RangeValidator<R>: Validator<T> {
         RangeValidator{field: "test", range}.validate(&value).expect("Should be in range");

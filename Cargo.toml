@@ -4,3 +4,5 @@ resolver = "2"
 
 [workspace.dependencies]
 syn = { version = "3.0.6", features = ["full", "extra-traits"] }
+impl_for_tuple = { git = "https://github.com/Riomhchlaraitheoir/impl_for_tuple.git", rev = "5d0829c" }
+#impl_for_tuple = { path = "../impl_for_tuple" }

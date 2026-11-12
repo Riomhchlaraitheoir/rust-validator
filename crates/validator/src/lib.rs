@@ -4,16 +4,19 @@ use derive_more::{Deref, From, Into};
 #[cfg(feature = "derive")]
 pub use ::validator_derive::Validator;
 
-macro_rules! modules {
-    ($($module:ident),*) => {
-        $(
-        mod $module;
-        pub use $module::*;
-        )*
-    };
-}
-
-modules!(length, not_empty, and, or, ip, email, url, elements, tuple, range, matches, parse_as, option);
+pub mod length;
+pub mod not_empty;
+pub mod and;
+pub mod or;
+pub mod ip;
+pub mod email;
+pub mod url;
+pub mod elements;
+pub mod tuple;
+pub mod range;
+pub mod matches;
+pub mod parse_as;
+pub mod option;
 
 pub type ValidationErrors<V> = <<V as Validate>::Validator as Validator<V>>::Error;
 

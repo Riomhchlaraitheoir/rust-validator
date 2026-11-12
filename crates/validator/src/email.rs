@@ -1,9 +1,9 @@
-use crate::ip::IpAddressValidator;
+use crate::ip::{IpAddressValidator, IpValidationError};
 use lazy_static::lazy_static;
 use regex::Regex;
 use thiserror::Error;
 
-use crate::{ErrorString, IpValidationError, ToErrors, Validator};
+use crate::{ErrorString, ToErrors, Validator};
 
 /// Validates whether the given string is an email based on the [HTML5 spec](https://html.spec.whatwg.org/multipage/forms.html#valid-e-mail-address).
 /// [RFC 5322](https://tools.ietf.org/html/rfc5322) is not practical in most circumstances and allows email addresses
