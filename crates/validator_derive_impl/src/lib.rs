@@ -1,7 +1,7 @@
 use std::any::Any;
 use proc_macro2::{Ident, TokenStream};
 use syn::token::Semi;
-use syn::{ExprRange, Member, Token, Type, Visibility};
+use syn::{ExprRange, Generics, Member, Token, Type, Visibility};
 use syn::punctuated::Punctuated;
 use crate::output::ValidatorOutput;
 
@@ -17,6 +17,7 @@ pub fn derive(input: Input) -> TokenStream {
 pub struct Input {
     vis: Visibility,
     name: Ident,
+    generics: Generics,
     data: InputData,
 }
 
@@ -74,7 +75,26 @@ struct Tuple(Punctuated<Box<dyn Validator>, Token![,]>);
 struct Range(ExprRange);
 struct Matches(Member);
 struct ParseAs(Box<Type>);
-struct Optional(Box<dyn Validator>);
+struct IsNoneOr(Box<dyn Validator>);
+struct IsSome;
+struct IsSomeAnd(Box<dyn Validator>);
+
+trait IntoValidator {
+    fn into_validator(self) -> Box<dyn Validator>;
+}
+
+impl<V: Validator> IntoValidator for V {
+    fn into_validator(self) -> Box<dyn Validator> {
+        Box::new(self)
+    }
+}
+
+impl IntoValidator for IsSome {
+    fn into_validator(self) -> Box<dyn Validator> {
+        IsSomeAnd(Ignore.into_validator()).into_validator()
+    }
+}
+
 
 macro_rules! impl_validator {
     ($($validator:ident$(($($arg:tt)*))?),* $(,)?) => {
@@ -134,7 +154,8 @@ impl_validator![
     Range(_),
     Matches(_),
     ParseAs(_),
-    Optional(Box<dyn Validator>)
+    IsNoneOr(Box<dyn Validator>),
+    IsSomeAnd(Box<dyn Validator>)
 ];
 
 trait WithMessage {

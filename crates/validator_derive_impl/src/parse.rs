@@ -24,6 +24,7 @@ impl Parse for Input {
         Ok(Self {
             vis: input.vis,
             name: input.ident,
+            generics: input.generics,
             data,
         })
     }
@@ -242,7 +243,9 @@ validator_type_parse![
     Range(_),
     Matches(_),
     ParseAs(_),
-    Optional(_),
+    IsNoneOr(_),
+    IsSome,
+    IsSomeAnd(_?),
 ];
 
 macro_rules! validator_parse {
@@ -254,7 +257,7 @@ macro_rules! validator_parse {
                     .with_message("failed to parse validator type")?;
                 match ident.to_string().as_str() {
                     $(
-                    $tag => Ok(Box::new(input.parse::<$validator>()?)),
+                    $tag => Ok(input.parse::<$validator>()?.into_validator()),
                     )*
                     other => Err(syn::Error::new(
                         ident.span(),
@@ -280,5 +283,8 @@ validator_parse!{
     "range" => Range,
     "matches" => Matches,
     "parse_as" => ParseAs,
-    "option" => Optional,
+    "option" => IsNoneOr,
+    "is_none_or" => IsNoneOr,
+    "is_some" => IsSome,
+    "is_some_and" => IsSomeAnd
 }

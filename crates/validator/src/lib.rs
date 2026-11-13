@@ -1,5 +1,5 @@
-use std::convert::Infallible;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
+use std::marker::PhantomData;
 use derive_more::{Deref, From, Into};
 #[cfg(feature = "derive")]
 pub use ::validator_derive::Validator;
@@ -36,14 +36,56 @@ pub trait Validator<T: ?Sized>: Sized {
 
 #[doc(hidden)]
 // this validator always passes values
-pub struct IgnoreValidator;
+pub struct IgnoreValidator<T>(PhantomData<T>);
 
-impl ToErrors for Infallible {
+impl ToErrors for ! {
     fn build_errors(&self, _: &mut Vec<ErrorString>) {}
 }
 
-impl<T> Validator<T> for IgnoreValidator {
-    type Error = Infallible;
+#[allow(clippy::new_without_default)]
+impl<T> IgnoreValidator<T> {
+    pub fn new() -> Self {
+        IgnoreValidator(PhantomData)
+    }
+}
+
+pub struct IgnoreError<T> {
+    _t: PhantomData<T>,
+    error: !
+}
+
+impl<T> PartialEq for IgnoreError<T> {
+    fn eq(&self, _: &Self) -> bool {
+        self.error
+    }
+}
+
+impl<T> Clone for IgnoreError<T> {
+    fn clone(&self) -> Self {
+        self.error
+    }
+}
+
+impl<T> ToErrors for IgnoreError<T> {
+    fn build_errors(&self, _: &mut Vec<ErrorString>) {
+        self.error
+    }
+}
+
+impl<T> From<IgnoreError<T>> for ! {
+    fn from(error: IgnoreError<T>) -> ! {
+        error.error
+    }
+}
+
+impl<T> Debug for IgnoreError<T> {
+    fn fmt(&self, _: &mut Formatter<'_>) -> std::fmt::Result {
+        self.error
+    }
+}
+
+impl<T> Validator<T> for IgnoreValidator<T> {
+    type Error = IgnoreError<T>;
 
     fn validate(&self, _: &T) -> Result<(), Self::Error> {
         Ok(())

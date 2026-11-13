@@ -1,6 +1,6 @@
 use crate::{
-    And, Default, Elements, Email, EnumVariant, Field, Ignore, Input, InputData, IpAddr, Length,
-    Matches, NotEmpty, Optional, Or, ParseAs, Range, StructFields, Tuple, Url,
+    And, Default, Elements, Email, EnumVariant, Field, Ignore, Input, InputData, IpAddr, IsNoneOr,
+    IsSomeAnd, Length, Matches, NotEmpty, Or, ParseAs, Range, StructFields, Tuple, Url,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
@@ -48,45 +48,118 @@ impl Input {
     }
 
     fn error_definition(&self) -> TokenStream {
-        let Input { vis, name: _, data } = self;
+        let Input {
+            vis,
+            name: _,
+            generics,
+            data,
+        } = self;
         let error_type = self.error_type();
+        let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
+        let where_predicates = where_clause
+            .iter()
+            .flat_map(|where_clause| where_clause.predicates.iter().cloned())
+            .collect::<Vec<_>>();
         match data {
             InputData::Struct { fields, .. } => {
                 if fields.named_fields {
-                    let members = fields.fields.iter().map(|f| &f.name);
+                    let members = fields.fields.iter().map(|f| &f.name).collect::<Vec<_>>();
                     let types = fields
                         .fields
                         .iter()
-                        .map(|f| f.validator.error_type(&f.ty.to_token_stream()));
+                        .map(|f| f.validator.error_type(&f.ty.to_token_stream()))
+                        .collect::<Vec<_>>();
                     let field_vis = fields.fields.iter().map(|f| &f.vis);
                     quote! {
-                        #[derive(Debug, PartialEq, Clone, Default)]
-                        #vis struct #error_type {
+                        #[derive(PartialEq, Clone)]
+                        #vis struct #error_type #generics {
                             #(#field_vis #members: Option<#types>,)*
+                        }
+
+                        #[automatically_derived]
+                        impl #impl_generics ::std::fmt::Debug for #error_type #type_generics where (): Sized, #(#where_predicates,)* #(Option<#types>: ::std::fmt::Debug),* {
+                            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                                f.debug_struct(stringify!(#error_type))
+                                #(.field(stringify!(#members), &self.#members))*
+                                .finish()
+                            }
+                        }
+
+                        #[automatically_derived]
+                        impl #impl_generics ::std::default::Default for #error_type #type_generics where (): Sized, #(#where_predicates,)* #(Option<#types>: ::std::fmt::Debug),* {
+                            fn default() -> Self {
+                                Self {
+                                    #(#members: None),*
+                                }
+                            }
                         }
                     }
                 } else {
+                    let members = (0..fields.fields.len())
+                        .map(Index::from)
+                        .map(Member::Unnamed)
+                        .collect::<Vec<_>>();
                     let types = fields
                         .fields
                         .iter()
-                        .map(|f| f.validator.error_type(&f.ty.to_token_stream()));
+                        .map(|f| f.validator.error_type(&f.ty.to_token_stream()))
+                        .collect::<Vec<_>>();
                     quote! {
-                        #[derive(Debug, PartialEq, Clone, Default)]
-                        #vis struct #error_type(#(Option<#types>,)*);
+                        #[derive(PartialEq, Clone)]
+                        #vis struct #error_type #generics(#(Option<#types>,)*);
+
+                        #[automatically_derived]
+                        impl #impl_generics ::std::fmt::Debug for #error_type #type_generics where (): Sized, #(#where_predicates,)* #(Option<#types>: ::std::fmt::Debug),* {
+                            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                                f.debug_tuple(stringify!(#error_type))
+                                #(.field(&self.#members))*
+                                .finish()
+                            }
+                        }
+
+                        #[automatically_derived]
+                        impl #impl_generics ::std::default::Default for #error_type #type_generics where (): Sized, #(#where_predicates,)* #(Option<#types>: ::std::fmt::Debug),* {
+                            fn default() -> Self {
+                                Self {
+                                    #(#members: None),*
+                                }
+                            }
+                        }
                     }
                 }
             }
             InputData::Enum { variants } => {
-                let variants = variants.iter().filter_map(EnumVariant::error_variant);
+                let types = variants.iter().flat_map(|v| {
+                    v.fields
+                        .iter()
+                        .flat_map(|fields| fields.fields.iter().map(|f| f.error_type()))
+                });
+                let (variants, debug_variants): (Vec<_>, Vec<_>) = variants
+                    .iter()
+                    .filter_map(|v| v.error_variant(&error_type))
+                    .unzip();
                 quote! {
-                    #[derive(Debug, PartialEq, Clone)]
-                    #vis enum #error_type { #(#variants),* }
+                    #[derive(PartialEq, Clone)]
+                    #vis enum #error_type #generics { #(#variants),* }
+
+                    #[automatically_derived]
+                    impl #impl_generics ::std::fmt::Debug for #error_type #type_generics where (): Sized, #(#where_predicates,)* #(Option<#types>: ::std::fmt::Debug),* {
+                        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                            match self {
+                                #(#debug_variants),*
+                            }
+                        }
+                    }
                 }
             }
         }
     }
     fn validator(&self) -> TokenStream {
-        let Input { data, .. } = self;
+        let Input { data, generics, .. } = self;
+        let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
+        let where_clause = where_clause
+            .map(ToTokens::to_token_stream)
+            .unwrap_or_default();
         match data {
             InputData::Struct { fields, semi_token } => {
                 let derived_type = &self.name;
@@ -112,13 +185,13 @@ impl Input {
                 };
 
                 quote! {
-                    #vis struct #name #define_validator_fields #semi_token
+                    #vis struct #name #generics #define_validator_fields #semi_token
 
                     #[automatically_derived]
-                    impl ::validator::Validator<#derived_type> for #name {
-                        type Error = #error;
+                    impl #impl_generics ::validator::Validator<#derived_type #type_generics> for #name #type_generics #where_clause {
+                        type Error = #error #type_generics;
                         #[allow(non_shorthand_field_patterns)]
-                        fn validate(&self, #data_pat: &#derived_type) -> Result<(), Self::Error> {
+                        fn validate(&self, #data_pat: &#derived_type #type_generics) -> Result<(), Self::Error> {
                                 let mut _valid = true;
                                 let validator = self;
                                 let error = #error_declaration;
@@ -181,13 +254,13 @@ impl Input {
                 quote! {
                     #(#variant_validators)*
 
-                    struct #validator_type(#(#variant_validator_names),*);
+                    struct #validator_type #generics(#(#variant_validator_names),*);
 
                     #[automatically_derived]
-                    impl ::validator::Validator<#derived_type> for #validator_type {
-                        type Error = #error_type;
+                    impl #impl_generics ::validator::Validator<#derived_type #type_generics> for #validator_type #type_generics #where_clause {
+                        type Error = #error_type #type_generics;
                         #[allow(non_shorthand_field_patterns)]
-                        fn validate(&self, value: &#derived_type) -> Result<(), Self::Error> {
+                        fn validate(&self, value: &#derived_type #type_generics) -> Result<(), Self::Error> {
                             match value {
                                 #(#match_arms),*
                             }
@@ -202,8 +275,13 @@ impl Input {
         let Input {
             name: derived_type,
             data,
+            generics,
             ..
         } = self;
+        let (impl_generics, type_generics, where_clause) = generics.split_for_impl();
+        let where_clause = where_clause
+            .map(ToTokens::to_token_stream)
+            .unwrap_or_default();
         match data {
             InputData::Struct {
                 fields: StructFields { fields, .. },
@@ -215,8 +293,8 @@ impl Input {
 
                 quote! {
                     #[automatically_derived]
-                    impl ::validator::Validate for #derived_type {
-                        type Validator = #validator_type;
+                    impl #impl_generics ::validator::Validate for #derived_type #type_generics #where_clause {
+                        type Validator = #validator_type #type_generics;
 
                         fn validator() -> Self::Validator {
                             #validator_type {
@@ -232,8 +310,8 @@ impl Input {
                 let members = (0..variants.len()).map(syn::Index::from);
                 quote! {
                     #[automatically_derived]
-                    impl ::validator::Validate for #derived_type {
-                        type Validator = #validator_type;
+                    impl #impl_generics ::validator::Validate for #derived_type #type_generics #where_clause {
+                        type Validator = #validator_type #type_generics;
                         fn validator() -> Self::Validator {
                             #validator_type {
                                 #(#members: #create_validator),*
@@ -261,8 +339,12 @@ impl Field {
         quote!(#name : #pat)
     }
 
+    fn error_type(&self) -> TokenStream {
+        self.validator.error_type(&self.ty.to_token_stream())
+    }
+
     fn error_field(&self) -> TokenStream {
-        let error_type = self.validator.error_type(&self.ty.to_token_stream());
+        let error_type = self.error_type();
         let ty = quote!(Option<#error_type>);
         self.field(ty)
     }
@@ -330,13 +412,36 @@ impl EnumVariant {
             struct #validator_name #validator_fields
         })
     }
-    fn error_variant(&self) -> Option<TokenStream> {
+    fn error_variant(&self, error_type: &Ident) -> Option<(TokenStream, TokenStream)> {
         let fields = self.fields.as_ref()?;
         let name = &self.name;
+        let debug = if fields.named_fields {
+            let members = fields.fields.iter().map(|f| &f.name).collect::<Vec<_>>();
+            quote! {
+                Self::#name { #(#members),* } =>
+                    f.debug_struct(concat!(stringify!(#error_type), "::", stringify!(#name)))
+                    #(.field(stringify!(#members), #members))*
+                    .finish()
+            }
+        } else {
+            let members = (0..fields.fields.len())
+                .map(Index::from)
+                .map(Member::Unnamed);
+            let vars = (0..fields.fields.len())
+                .map(|i| format_ident!("_{}", i))
+                .collect::<Vec<_>>();
+            quote! {
+                Self::#name { #(#members: #vars),* } =>
+                f.debug_tuple(concat!(stringify!(#error_type), "::", stringify!(#name)))
+                #(.field(#vars))*
+                .finish()
+            }
+        };
         let fields = fields.error_definition();
-        Some(quote! {
+        let def = quote! {
             #name #fields
-        })
+        };
+        Some((def, debug))
     }
 }
 
@@ -545,16 +650,16 @@ impl ValidatorOutput for Default {
     }
 }
 impl ValidatorOutput for Ignore {
-    fn create(&self, _field: &str, _ty: &TokenStream) -> TokenStream {
-        quote!(::validator::IgnoreValidator)
+    fn create(&self, _field: &str, ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IgnoreValidator::<#ty>::new())
     }
 
-    fn validator_type(&self, _ty: &TokenStream) -> TokenStream {
-        quote!(::validator::IgnoreValidator)
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IgnoreValidator<#ty>)
     }
 
-    fn error_type(&self, _ty: &TokenStream) -> TokenStream {
-        quote!(::core::convert::Infallible)
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        quote!(::validator::IgnoreError<#ty>)
     }
 }
 impl ValidatorOutput for Tuple {
@@ -647,21 +752,41 @@ impl ValidatorOutput for ParseAs {
         quote!(::validator::parse_as::ParseAsError<#ty>)
     }
 }
-impl ValidatorOutput for Optional {
+impl ValidatorOutput for IsNoneOr {
     fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
         let ty = quote!(<#ty as ::validator::option::OptionValue>::Inner);
         let inner = self.0.create(field, &ty);
-        quote!(::validator::option::OptionValidator::new(#inner))
+        quote!(::validator::option::NoneOrValidator::new(#inner))
     }
 
     fn validator_type(&self, ty: &TokenStream) -> TokenStream {
         let ty = quote!(<#ty as ::validator::option::OptionValue>::Inner);
         let inner = self.0.validator_type(&ty);
-        quote!(::validator::option::OptionValidator<#inner>)
+        quote!(::validator::option::NoneOrValidator<#inner>)
     }
 
     fn error_type(&self, ty: &TokenStream) -> TokenStream {
         let ty = quote!(<#ty as ::validator::option::OptionValue>::Inner);
         self.0.error_type(&ty)
+    }
+}
+
+impl ValidatorOutput for IsSomeAnd {
+    fn create(&self, field: &str, ty: &TokenStream) -> TokenStream {
+        let ty = quote!(<#ty as ::validator::option::OptionValue>::Inner);
+        let inner = self.0.create(field, &ty);
+        quote!(::validator::option::SomeAndValidator::new(#field, #inner))
+    }
+
+    fn validator_type(&self, ty: &TokenStream) -> TokenStream {
+        let ty = quote!(<#ty as ::validator::option::OptionValue>::Inner);
+        let inner = self.0.validator_type(&ty);
+        quote!(::validator::option::SomeAndValidator<#inner>)
+    }
+
+    fn error_type(&self, ty: &TokenStream) -> TokenStream {
+        let ty = quote!(<#ty as ::validator::option::OptionValue>::Inner);
+        let inner = self.0.error_type(&ty);
+        quote!(::validator::option::SomeAndError<#inner>)
     }
 }

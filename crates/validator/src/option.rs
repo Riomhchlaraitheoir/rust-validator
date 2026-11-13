@@ -1,20 +1,33 @@
-use crate::{Validator};
+use thiserror::Error;
+use crate::{ErrorString, ToErrors, Validator};
 
-/// Validates the value if it is present
-pub struct OptionValidator<V> {
-    inner: V,
+pub trait OptionValue {
+    type Inner;
+    fn inner(&self) -> Option<&Self::Inner>;
 }
 
-impl<V> OptionValidator<V> {
-    pub fn new(inner: V) -> Self {
-        OptionValidator { inner }
+impl<T> OptionValue for Option<T> {
+    type Inner = T;
+    fn inner(&self) -> Option<&T> {
+        self.as_ref()
     }
 }
 
-impl<V: Validator<T>, T> Validator<Option<T>> for OptionValidator<V> {
+/// Validates the value if it is present
+pub struct NoneOrValidator<V> {
+    inner: V,
+}
+
+impl<V> NoneOrValidator<V> {
+    pub fn new(inner: V) -> Self {
+        NoneOrValidator { inner }
+    }
+}
+
+impl<V: Validator<T::Inner>, T: OptionValue> Validator<T> for NoneOrValidator<V> {
     type Error = V::Error;
-    fn validate(&self, value: &Option<T>) -> Result<(), Self::Error> {
-        if let Some(value) = value {
+    fn validate(&self, value: &T) -> Result<(), Self::Error> {
+        if let Some(value) = value.inner() {
             self.inner.validate(value)
         } else {
             Ok(())
@@ -22,10 +35,44 @@ impl<V: Validator<T>, T> Validator<Option<T>> for OptionValidator<V> {
     }
 }
 
-pub trait OptionValue {
-    type Inner;
+
+pub struct SomeAndValidator<V> {
+    field: &'static str,
+    inner: V
 }
 
-impl<T> OptionValue for Option<T> {
-    type Inner = T;
+#[derive(Debug, Error, PartialEq, Clone)]
+pub enum SomeAndError<E> {
+    #[error(transparent)]
+    Some(E),
+    #[error("Is None")]
+    IsNone(&'static str),
+}
+
+impl<E: ToErrors> ToErrors for SomeAndError<E> {
+    fn build_errors(&self, errors: &mut Vec<ErrorString>) {
+        match self {
+            SomeAndError::Some(error) => error.build_errors(errors),
+            SomeAndError::IsNone(field) => {
+                errors.push(format!("{field} is required").into())
+            }
+        };
+    }
+}
+
+impl<V> SomeAndValidator<V> {
+    pub fn new(field: &'static str, inner: V) -> Self {
+        SomeAndValidator { field, inner }
+    }
+}
+
+impl<T: OptionValue, V: Validator<T::Inner>> Validator<T> for SomeAndValidator<V> {
+    type Error = SomeAndError<V::Error>;
+
+    fn validate(&self, value: &T) -> Result<(), Self::Error> {
+        match value.inner() {
+            None => Err(SomeAndError::IsNone(self.field)),
+            Some(some) => self.inner.validate(some).map_err(SomeAndError::Some),
+        }
+    }
 }
